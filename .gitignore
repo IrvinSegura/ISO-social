@@ -1,0 +1,44 @@
+# Built output
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# App build outputs
+app/build
+feature/*/build
+core/*/build
+
+# Google Services — contains API keys, never commit
+# app/google-services.json  ← mantenerlo para que funcione Firebase
+
+# Keystore files
+*.jks
+*.keystore
+!debug.keystore
+
+# Gradle wrapper (optional — se suele incluir)
+#gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin compiler sessions
+.kotlin/
+
+# Android Studio
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Profiling
+*.hprof

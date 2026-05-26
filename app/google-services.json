@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1004397164459",
+    "project_id": "iso-social",
+    "storage_bucket": "iso-social.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1004397164459:android:4e60ce42d80f8ca78884ee",
+        "android_client_info": {
+          "package_name": "com.nexus.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCx9XfeotPiXeNryMmqkUjD_J5mCsy5z54"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
