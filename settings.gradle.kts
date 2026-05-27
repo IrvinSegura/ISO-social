@@ -27,6 +27,9 @@ include(":app")
 include(":core:core-common")
 include(":core:core-ui")
 include(":core:core-datastore")
+include(":core:core-network")
+include(":core:core-database")
 
 // Feature modules
 include(":feature:feature-auth")
+include(":feature:feature-feed")
