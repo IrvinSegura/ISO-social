@@ -1,16 +1,19 @@
 package com.nexus.feature.feed.presentation.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -37,6 +40,7 @@ fun PostCard(
     post: Post,
     onEcoClick: () -> Unit,
     onClick: () -> Unit,
+    onAuthorClick: (authorId: String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -48,51 +52,64 @@ fun PostCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PostAvatar(
-                    photoUrl = post.authorPhotoUrl,
-                    name = post.authorName,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = post.authorName,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = formatRelativeTime(post.createdAt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        Column {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Author row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onAuthorClick(post.authorId) },
+                ) {
+                    PostAvatar(photoUrl = post.authorPhotoUrl, name = post.authorName)
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = post.authorName,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = formatRelativeTime(post.createdAt),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (post.circleName != null) {
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Text(post.circleName, style = MaterialTheme.typography.labelSmall)
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            ),
+                        )
+                    }
                 }
-                if (post.circleName != null) {
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                text = post.circleName,
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                    )
-                }
+
+                Spacer(Modifier.height(12.dp))
+                Text(text = post.content, style = MaterialTheme.typography.bodyMedium)
             }
 
-            Spacer(Modifier.height(12.dp))
+            // Image (full-width, outside padding)
+            if (post.imageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(post.imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Imagen del post",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f),
+                )
+            }
 
-            Text(
-                text = post.content,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Actions
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
                 EcoButton(onClick = onEcoClick)
                 if (post.isOwnPost && post.ecoCount > 0) {
                     Spacer(Modifier.width(8.dp))
@@ -108,29 +125,20 @@ fun PostCard(
 }
 
 @Composable
-private fun PostAvatar(
-    photoUrl: String?,
-    name: String,
-    modifier: Modifier = Modifier,
-) {
-    val size = 40.dp
+private fun PostAvatar(photoUrl: String?, name: String) {
     if (photoUrl != null) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(photoUrl)
-                .crossfade(true)
-                .build(),
+                .data(photoUrl).crossfade(true).build(),
             contentDescription = name,
             contentScale = ContentScale.Crop,
-            modifier = modifier
-                .size(size)
-                .clip(CircleShape),
+            modifier = Modifier.size(40.dp).clip(CircleShape),
         )
     } else {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = modifier
-                .size(size)
+            modifier = Modifier
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primaryContainer),
         ) {
@@ -145,8 +153,7 @@ private fun PostAvatar(
 }
 
 private fun formatRelativeTime(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
+    val diff = System.currentTimeMillis() - timestamp
     return when {
         diff < 60_000 -> "ahora"
         diff < 3_600_000 -> "${diff / 60_000}m"

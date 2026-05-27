@@ -1,5 +1,6 @@
 package com.nexus.feature.post.domain.usecase
 
+import android.net.Uri
 import com.nexus.core.common.result.NexusResult
 import com.nexus.feature.post.domain.repository.PostRepository
 import javax.inject.Inject
@@ -11,5 +12,6 @@ class CreatePostUseCase @Inject constructor(
         content: String,
         circleId: String?,
         circleName: String?,
-    ): NexusResult<String> = repository.createPost(content.trim(), circleId, circleName)
+        imageUri: Uri?,
+    ): NexusResult<String> = repository.createPost(content.trim(), circleId, circleName, imageUri)
 }

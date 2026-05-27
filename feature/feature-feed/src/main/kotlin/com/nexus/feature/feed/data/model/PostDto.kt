@@ -9,6 +9,7 @@ data class PostDto(
     val circleId: String? = null,
     val circleName: String? = null,
     val ecoCount: Int = 0,
+    val imageUrl: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
 )

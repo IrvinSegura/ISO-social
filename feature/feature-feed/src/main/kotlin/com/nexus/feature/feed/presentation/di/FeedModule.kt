@@ -32,6 +32,8 @@ abstract class FeedModule {
         @Provides
         @Singleton
         fun provideFeedDatabase(@ApplicationContext context: Context): FeedDatabase =
-            Room.databaseBuilder(context, FeedDatabase::class.java, "nexus_feed_db").build()
+            Room.databaseBuilder(context, FeedDatabase::class.java, "nexus_feed_db")
+                .fallbackToDestructiveMigration()
+                .build()
     }
 }

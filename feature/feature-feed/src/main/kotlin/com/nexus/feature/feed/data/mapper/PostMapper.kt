@@ -13,6 +13,7 @@ fun PostDto.toEntity(): PostEntity = PostEntity(
     circleId = circleId,
     circleName = circleName,
     ecoCount = ecoCount,
+    imageUrl = imageUrl,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
@@ -28,4 +29,5 @@ fun PostEntity.toDomain(currentUserId: String): Post = Post(
     ecoCount = ecoCount,
     createdAt = createdAt,
     isOwnPost = authorId == currentUserId,
+    imageUrl = imageUrl,
 )

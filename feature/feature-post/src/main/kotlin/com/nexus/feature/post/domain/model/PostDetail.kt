@@ -9,6 +9,7 @@ data class PostDetail(
     val circleId: String?,
     val circleName: String?,
     val ecoCount: Int,
+    val imageUrl: String?,
     val createdAt: Long,
     val isOwnPost: Boolean,
     val ecos: List<Eco>,

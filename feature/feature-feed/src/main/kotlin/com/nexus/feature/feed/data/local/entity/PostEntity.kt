@@ -13,6 +13,7 @@ data class PostEntity(
     val circleId: String?,
     val circleName: String?,
     val ecoCount: Int,
+    val imageUrl: String?,
     val createdAt: Long,
     val updatedAt: Long,
 )

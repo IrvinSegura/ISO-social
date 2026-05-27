@@ -1,5 +1,6 @@
 package com.nexus.feature.post.data.remote
 
+import android.net.Uri
 import com.nexus.feature.post.data.model.EcoDto
 import com.nexus.feature.post.data.model.PostDto
 
@@ -13,6 +14,7 @@ interface PostRemoteDataSource {
         content: String,
         circleId: String?,
         circleName: String?,
+        imageUri: Uri?,
     ): String
     suspend fun sendEco(postId: String, authorId: String, authorName: String, message: String)
 }

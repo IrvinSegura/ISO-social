@@ -11,4 +11,5 @@ data class Post(
     val ecoCount: Int,
     val createdAt: Long,
     val isOwnPost: Boolean,
+    val imageUrl: String? = null,
 )

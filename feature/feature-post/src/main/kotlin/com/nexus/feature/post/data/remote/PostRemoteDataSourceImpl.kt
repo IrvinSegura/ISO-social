@@ -1,8 +1,10 @@
 package com.nexus.feature.post.data.remote
 
+import android.net.Uri
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.storage.FirebaseStorage
 import com.nexus.feature.post.data.model.EcoDto
 import com.nexus.feature.post.data.model.PostDto
 import kotlinx.coroutines.tasks.await
@@ -10,6 +12,7 @@ import javax.inject.Inject
 
 class PostRemoteDataSourceImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
+    private val storage: FirebaseStorage,
 ) : PostRemoteDataSource {
 
     override suspend fun getPost(postId: String): PostDto {
@@ -35,7 +38,17 @@ class PostRemoteDataSourceImpl @Inject constructor(
         content: String,
         circleId: String?,
         circleName: String?,
+        imageUri: Uri?,
     ): String {
+        // Generate the ID client-side so we can name the Storage path before uploading
+        val postId = firestore.collection(POSTS).document().id
+
+        val imageUrl: String? = imageUri?.let { uri ->
+            val ref = storage.reference.child("posts/$postId/image.jpg")
+            ref.putFile(uri).await()
+            ref.downloadUrl.await().toString()
+        }
+
         val now = System.currentTimeMillis()
         val data = mapOf(
             "authorId" to authorId,
@@ -44,11 +57,13 @@ class PostRemoteDataSourceImpl @Inject constructor(
             "content" to content,
             "circleId" to circleId,
             "circleName" to circleName,
+            "imageUrl" to imageUrl,
             "ecoCount" to 0,
             "createdAt" to now,
             "updatedAt" to now,
         )
-        return firestore.collection(POSTS).add(data).await().id
+        firestore.collection(POSTS).document(postId).set(data).await()
+        return postId
     }
 
     override suspend fun sendEco(

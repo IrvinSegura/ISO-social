@@ -1,5 +1,6 @@
 package com.nexus.feature.post.data.repository
 
+import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.nexus.core.common.result.NexusResult
 import com.nexus.core.common.result.safeCall
@@ -19,6 +20,7 @@ class PostRepositoryImpl @Inject constructor(
         content: String,
         circleId: String?,
         circleName: String?,
+        imageUri: Uri?,
     ): NexusResult<String> = safeCall {
         val user = auth.currentUser ?: error("Usuario no autenticado")
         remoteDataSource.createPost(
@@ -28,6 +30,7 @@ class PostRepositoryImpl @Inject constructor(
             content = content,
             circleId = circleId,
             circleName = circleName,
+            imageUri = imageUri,
         )
     }
 

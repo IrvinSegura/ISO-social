@@ -9,7 +9,7 @@ import com.nexus.feature.feed.data.local.entity.RemoteKeyEntity
 
 @Database(
     entities = [PostEntity::class, RemoteKeyEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class FeedDatabase : RoomDatabase() {

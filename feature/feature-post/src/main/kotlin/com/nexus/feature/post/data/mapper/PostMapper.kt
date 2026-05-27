@@ -22,6 +22,7 @@ fun PostDto.toDetail(currentUserId: String, ecos: List<Eco>): PostDetail = PostD
     circleId = circleId,
     circleName = circleName,
     ecoCount = ecoCount,
+    imageUrl = imageUrl,
     createdAt = createdAt,
     isOwnPost = authorId == currentUserId,
     ecos = ecos,

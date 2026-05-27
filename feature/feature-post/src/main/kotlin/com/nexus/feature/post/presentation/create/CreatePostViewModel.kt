@@ -2,6 +2,7 @@ package com.nexus.feature.post.presentation.create
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.nexus.core.common.result.NexusResult
 import com.nexus.feature.post.domain.usecase.CreatePostUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,6 +21,7 @@ private const val MIN_CONTENT_LENGTH = 10
 @HiltViewModel
 class CreatePostViewModel @Inject constructor(
     private val createPostUseCase: CreatePostUseCase,
+    private val auth: FirebaseAuth,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreatePostUiState())
@@ -28,13 +30,28 @@ class CreatePostViewModel @Inject constructor(
     private val _events = Channel<CreatePostEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
 
+    init {
+        val user = auth.currentUser
+        _uiState.update {
+            it.copy(
+                currentUserName = user?.displayName.orEmpty(),
+                currentUserPhotoUrl = user?.photoUrl?.toString(),
+            )
+        }
+    }
+
     fun onIntent(intent: CreatePostIntent) {
         when (intent) {
             is CreatePostIntent.ContentChanged -> {
-                val trimmed = intent.value.take(MAX_CONTENT_LENGTH)
                 _uiState.update {
-                    it.copy(content = trimmed, contentError = null)
+                    it.copy(content = intent.value.take(MAX_CONTENT_LENGTH), contentError = null)
                 }
+            }
+            is CreatePostIntent.ImageSelected -> {
+                _uiState.update { it.copy(selectedImageUri = intent.uri) }
+            }
+            CreatePostIntent.RemoveImage -> {
+                _uiState.update { it.copy(selectedImageUri = null) }
             }
             CreatePostIntent.Publish -> publish()
             CreatePostIntent.DismissError -> _uiState.update { it.copy(error = null) }
@@ -49,16 +66,22 @@ class CreatePostViewModel @Inject constructor(
             }
             return
         }
+        val imageUri = _uiState.value.selectedImageUri
         viewModelScope.launch {
-            _uiState.update { it.copy(isPosting = true, contentError = null) }
-            when (val result = createPostUseCase(content, circleId = null, circleName = null)) {
+            _uiState.update {
+                it.copy(
+                    publishingStep = if (imageUri != null) PublishingStep.UploadingImage else PublishingStep.SavingPost,
+                    contentError = null,
+                )
+            }
+            when (val result = createPostUseCase(content, circleId = null, circleName = null, imageUri = imageUri)) {
                 is NexusResult.Success -> {
-                    _uiState.update { it.copy(isPosting = false) }
+                    _uiState.update { it.copy(publishingStep = PublishingStep.Idle) }
                     _events.send(CreatePostEvent.PostCreated)
                 }
                 is NexusResult.Error -> {
                     _uiState.update {
-                        it.copy(isPosting = false, error = result.exception.message)
+                        it.copy(publishingStep = PublishingStep.Idle, error = result.exception.message)
                     }
                 }
             }
