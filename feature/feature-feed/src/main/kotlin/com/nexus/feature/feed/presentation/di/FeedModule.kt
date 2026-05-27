@@ -2,7 +2,6 @@ package com.nexus.feature.feed.presentation.di
 
 import android.content.Context
 import androidx.room.Room
-import com.google.firebase.firestore.FirebaseFirestore
 import com.nexus.feature.feed.data.local.db.FeedDatabase
 import com.nexus.feature.feed.data.remote.FeedRemoteDataSource
 import com.nexus.feature.feed.data.remote.FeedRemoteDataSourceImpl
@@ -34,11 +33,5 @@ abstract class FeedModule {
         @Singleton
         fun provideFeedDatabase(@ApplicationContext context: Context): FeedDatabase =
             Room.databaseBuilder(context, FeedDatabase::class.java, "nexus_feed_db").build()
-
-        // NOTE: Feature-post, feature-circles, etc. will also need FirebaseFirestore.
-        // Extract this to a shared core-firebase module in Session 3.
-        @Provides
-        @Singleton
-        fun provideFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
     }
 }

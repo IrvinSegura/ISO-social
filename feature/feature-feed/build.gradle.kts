@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation(project(":core:core-common"))
     implementation(project(":core:core-ui"))
+    implementation(project(":core:core-firebase"))
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -49,11 +50,6 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.paging.runtime)
     implementation(libs.paging.compose)
-
-    // Firebase
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.auth)
 
     // DI
     implementation(libs.hilt.android)

@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -30,6 +32,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.nexus.feature.feed.presentation.navigation.FeedGraph
 import com.nexus.feature.feed.presentation.navigation.feedNavGraph
+import com.nexus.feature.post.presentation.navigation.CreatePostRoute
+import com.nexus.feature.post.presentation.navigation.PostDetailRoute
+import com.nexus.feature.post.presentation.navigation.postNavGraph
 import kotlinx.serialization.Serializable
 
 @Serializable object CirclesRoute
@@ -75,13 +80,24 @@ fun MainScreen() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val isOnMainTab = bottomNavItems.any { it.isSelected(currentDestination) }
 
     Scaffold(
         bottomBar = {
-            NexusBottomBar(
-                navController = navController,
-                currentDestination = currentDestination,
-            )
+            if (isOnMainTab) {
+                NexusBottomBar(navController = navController, currentDestination = currentDestination)
+            }
+        },
+        floatingActionButton = {
+            if (isOnMainTab) {
+                FloatingActionButton(
+                    onClick = { navController.navigate(CreatePostRoute) },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Crear publicación")
+                }
+            }
         },
     ) { paddingValues ->
         NavHost(
@@ -89,17 +105,14 @@ fun MainScreen() {
             startDestination = FeedGraph,
             modifier = Modifier.padding(paddingValues),
         ) {
-            feedNavGraph(navController)
+            feedNavGraph(
+                onNavigateToPost = { postId -> navController.navigate(PostDetailRoute(postId)) },
+            )
+            postNavGraph(navController)
 
-            composable<CirclesRoute> {
-                PlaceholderScreen("Círculos — próximamente")
-            }
-            composable<MessagesRoute> {
-                PlaceholderScreen("Mensajes — próximamente")
-            }
-            composable<ProfileRoute> {
-                PlaceholderScreen("Perfil — próximamente")
-            }
+            composable<CirclesRoute> { PlaceholderScreen("Círculos — próximamente") }
+            composable<MessagesRoute> { PlaceholderScreen("Mensajes — próximamente") }
+            composable<ProfileRoute> { PlaceholderScreen("Perfil — próximamente") }
         }
     }
 }

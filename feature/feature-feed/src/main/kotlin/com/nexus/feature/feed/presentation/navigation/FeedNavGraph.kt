@@ -1,6 +1,5 @@
 package com.nexus.feature.feed.presentation.navigation
 
-import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
@@ -13,18 +12,10 @@ object FeedGraph
 @Serializable
 object FeedRoute
 
-@Serializable
-data class PostDetailRoute(val postId: String)
-
-fun NavGraphBuilder.feedNavGraph(navController: NavController) {
+fun NavGraphBuilder.feedNavGraph(onNavigateToPost: (String) -> Unit) {
     navigation<FeedGraph>(startDestination = FeedRoute) {
         composable<FeedRoute> {
-            FeedScreen(
-                onNavigateToPost = { postId ->
-                    navController.navigate(PostDetailRoute(postId))
-                },
-            )
+            FeedScreen(onNavigateToPost = onNavigateToPost)
         }
-        // PostDetailScreen — Session 3 (feature-post)
     }
 }
