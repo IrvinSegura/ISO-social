@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // ── Posts ────────────────────────────────────────────────────────────
+    match /posts/{postId} {
+      allow read: if isAuth();
+
+      // Crear post: el autor debe ser el usuario autenticado
+      allow create: if isAuth()
+        && request.auth.uid == request.resource.data.authorId;
+
+      // Actualizar post: el autor puede editar su contenido;
+      // cualquier usuario autenticado puede actualizar reactions y ecoCount
+      allow update: if isAuth()
+        && (request.auth.uid == resource.data.authorId
+            || request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['reactions', 'ecoCount']));
+
+      // ── Ecos (comentarios) ──────────────────────────────────────────────
+      match /ecos/{ecoId} {
+        allow read: if isAuth();
+        allow create: if isAuth()
+          && request.auth.uid == request.resource.data.authorId;
+      }
+
+      // ── Reacciones por usuario ──────────────────────────────────────────
+      match /userReactions/{userId} {
+        allow read: if isAuth();
+        allow write: if isAuth() && request.auth.uid == userId;
+      }
+    }
+
+    // ── Usuarios ────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.auth.uid == userId;
+    }
+  }
+}

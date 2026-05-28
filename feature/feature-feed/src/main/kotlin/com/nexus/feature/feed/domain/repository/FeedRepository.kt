@@ -8,4 +8,5 @@ import kotlinx.coroutines.flow.Flow
 interface FeedRepository {
     fun getFeed(): Flow<PagingData<Post>>
     suspend fun sendEco(postId: String, message: String): NexusResult<Unit>
+    suspend fun toggleReaction(postId: String, emoji: String): NexusResult<Unit>
 }

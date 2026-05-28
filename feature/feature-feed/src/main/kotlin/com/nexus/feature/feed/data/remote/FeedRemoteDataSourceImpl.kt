@@ -3,6 +3,7 @@ package com.nexus.feature.feed.data.remote
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import com.nexus.feature.feed.data.model.PostDto
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -35,17 +36,51 @@ class FeedRemoteDataSourceImpl @Inject constructor(
             "authorId" to authorId,
             "authorName" to authorName,
             "message" to message,
+            "type" to "TEXT",
             "createdAt" to System.currentTimeMillis(),
         )
-        firestore.collection(POSTS).document(postId)
-            .collection(ECOS).add(eco).await()
+        val postRef = firestore.collection(POSTS).document(postId)
+        val batch = firestore.batch()
+        batch.set(postRef.collection(ECOS).document(), eco)
+        // set+merge crea el campo ecoCount si no existe
+        batch.set(postRef, mapOf("ecoCount" to FieldValue.increment(1)), SetOptions.merge())
+        batch.commit().await()
+    }
 
-        firestore.collection(POSTS).document(postId)
-            .update("ecoCount", FieldValue.increment(1)).await()
+    override suspend fun toggleReaction(postId: String, userId: String, emoji: String) {
+        val postRef = firestore.collection(POSTS).document(postId)
+        val userReactionRef = postRef.collection(USER_REACTIONS).document(userId)
+
+        firestore.runTransaction { tx ->
+            val userReactionSnap = tx.get(userReactionRef)
+            val currentEmoji = if (userReactionSnap.exists()) {
+                userReactionSnap.getString("emoji")
+            } else null
+
+            when {
+                currentEmoji == emoji -> {
+                    // Quitar reacción
+                    tx.delete(userReactionRef)
+                    tx.update(postRef, "reactions.$emoji", FieldValue.increment(-1L))
+                }
+                currentEmoji != null -> {
+                    // Cambiar reacción
+                    tx.update(postRef, "reactions.$currentEmoji", FieldValue.increment(-1L))
+                    tx.set(userReactionRef, mapOf("emoji" to emoji))
+                    tx.update(postRef, "reactions.$emoji", FieldValue.increment(1L))
+                }
+                else -> {
+                    // Nueva reacción
+                    tx.set(userReactionRef, mapOf("emoji" to emoji))
+                    tx.update(postRef, "reactions.$emoji", FieldValue.increment(1L))
+                }
+            }
+        }.await()
     }
 
     companion object {
         private const val POSTS = "posts"
         private const val ECOS = "ecos"
+        private const val USER_REACTIONS = "userReactions"
     }
 }

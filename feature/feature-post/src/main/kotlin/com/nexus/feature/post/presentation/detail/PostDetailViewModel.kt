@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.nexus.core.common.result.NexusResult
+import com.nexus.feature.post.data.remote.GiphyApi
+import com.nexus.feature.post.domain.model.EcoType
 import com.nexus.feature.post.domain.usecase.GetPostDetailUseCase
 import com.nexus.feature.post.domain.usecase.SendEcoUseCase
 import com.nexus.feature.post.presentation.navigation.PostDetailRoute
@@ -23,6 +25,7 @@ class PostDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getPostDetailUseCase: GetPostDetailUseCase,
     private val sendEcoUseCase: SendEcoUseCase,
+    private val giphyApi: GiphyApi,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle.toRoute<PostDetailRoute>().postId
@@ -35,13 +38,18 @@ class PostDetailViewModel @Inject constructor(
 
     init {
         loadPost()
+        searchGifs("")
     }
 
     fun onIntent(intent: PostDetailIntent) {
         when (intent) {
             PostDetailIntent.OpenEcoSheet -> _uiState.update { it.copy(ecoSheetOpen = true) }
             PostDetailIntent.CloseEcoSheet -> _uiState.update { it.copy(ecoSheetOpen = false) }
-            is PostDetailIntent.SendEco -> sendEco(intent.message)
+            is PostDetailIntent.SelectEcoType -> _uiState.update { it.copy(selectedEcoType = intent.type) }
+            is PostDetailIntent.SendTextEco -> sendEco(EcoType.TEXT, intent.message, null, null)
+            is PostDetailIntent.SendEmojiEco -> sendEco(EcoType.EMOJI, "", intent.emoji, null)
+            is PostDetailIntent.SendMediaEco -> sendEco(intent.type, "", null, intent.mediaUrl)
+            is PostDetailIntent.SearchGifs -> searchGifs(intent.query)
             PostDetailIntent.DismissError -> _uiState.update { it.copy(error = null) }
             PostDetailIntent.Retry -> loadPost()
         }
@@ -61,10 +69,15 @@ class PostDetailViewModel @Inject constructor(
         }
     }
 
-    private fun sendEco(message: String) {
+    private fun sendEco(
+        type: EcoType,
+        message: String,
+        emoji: String?,
+        mediaUrl: String?,
+    ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isEcoSending = true) }
-            when (val result = sendEcoUseCase(postId, message)) {
+            when (val result = sendEcoUseCase(postId, type, message, emoji, mediaUrl)) {
                 is NexusResult.Success -> {
                     _uiState.update { it.copy(isEcoSending = false, ecoSheetOpen = false) }
                     _events.send(PostDetailEvent.EcoSent)
@@ -73,6 +86,22 @@ class PostDetailViewModel @Inject constructor(
                 is NexusResult.Error -> _uiState.update {
                     it.copy(isEcoSending = false, error = result.exception.message)
                 }
+            }
+        }
+    }
+
+    private fun searchGifs(query: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSearchingGifs = true, gifSearchQuery = query) }
+            try {
+                val response = if (query.isBlank()) {
+                    giphyApi.trending()
+                } else {
+                    giphyApi.search(query)
+                }
+                _uiState.update { it.copy(gifResults = response.data, isSearchingGifs = false) }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isSearchingGifs = false, gifResults = emptyList()) }
             }
         }
     }

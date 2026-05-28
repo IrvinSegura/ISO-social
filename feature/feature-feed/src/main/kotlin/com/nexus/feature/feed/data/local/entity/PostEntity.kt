@@ -13,6 +13,13 @@ data class PostEntity(
     val circleId: String?,
     val circleName: String?,
     val ecoCount: Int,
+    val imageUrls: List<String> = emptyList(),
+    val audioUrl: String? = null,
+    val fileUrl: String? = null,
+    val fileName: String? = null,
+    val mood: String? = null,
+    val locationName: String? = null,
+    val reactions: Map<String, Int> = emptyMap(),
     val createdAt: Long,
     val updatedAt: Long,
 )
