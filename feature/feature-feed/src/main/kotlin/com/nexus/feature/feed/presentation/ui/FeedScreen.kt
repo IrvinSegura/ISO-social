@@ -1,5 +1,7 @@
 package com.nexus.feature.feed.presentation.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -86,7 +88,18 @@ fun FeedScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceContainerLowest,
+                    ),
+                ),
+            ),
+    ) {
         when {
             posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
                 CircularProgressIndicator(
