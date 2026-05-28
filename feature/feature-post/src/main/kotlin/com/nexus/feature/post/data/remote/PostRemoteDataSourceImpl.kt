@@ -7,7 +7,9 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import com.nexus.feature.post.data.model.EcoDto
 import com.nexus.feature.post.data.model.PostDto
+import com.nexus.feature.post.domain.model.EcoType
 import kotlinx.coroutines.tasks.await
+import java.io.File
 import javax.inject.Inject
 
 class PostRemoteDataSourceImpl @Inject constructor(
@@ -38,13 +40,34 @@ class PostRemoteDataSourceImpl @Inject constructor(
         content: String,
         circleId: String?,
         circleName: String?,
-        imageUri: Uri?,
+        imageUris: List<Uri>,
+        audioPath: String?,
+        fileUri: Uri?,
+        fileName: String?,
+        mood: String?,
+        locationName: String?,
     ): String {
-        // Generate the ID client-side so we can name the Storage path before uploading
         val postId = firestore.collection(POSTS).document().id
 
-        val imageUrl: String? = imageUri?.let { uri ->
-            val ref = storage.reference.child("posts/$postId/image.jpg")
+        // Upload images
+        val imageUrls = imageUris.mapIndexed { index, uri ->
+            val ref = storage.reference.child("posts/$postId/images/image_$index.jpg")
+            ref.putFile(uri).await()
+            ref.downloadUrl.await().toString()
+        }
+
+        // Upload audio
+        val audioUrl: String? = audioPath?.let { path ->
+            val file = File(path)
+            val ref = storage.reference.child("posts/$postId/audio.m4a")
+            ref.putFile(Uri.fromFile(file)).await()
+            ref.downloadUrl.await().toString()
+        }
+
+        // Upload file
+        val uploadedFileUrl: String? = fileUri?.let { uri ->
+            val safeName = fileName ?: "file"
+            val ref = storage.reference.child("posts/$postId/files/$safeName")
             ref.putFile(uri).await()
             ref.downloadUrl.await().toString()
         }
@@ -57,8 +80,14 @@ class PostRemoteDataSourceImpl @Inject constructor(
             "content" to content,
             "circleId" to circleId,
             "circleName" to circleName,
-            "imageUrl" to imageUrl,
+            "imageUrls" to imageUrls,
+            "audioUrl" to audioUrl,
+            "fileUrl" to uploadedFileUrl,
+            "fileName" to fileName,
+            "mood" to mood,
+            "locationName" to locationName,
             "ecoCount" to 0,
+            "reactions" to emptyMap<String, Long>(),
             "createdAt" to now,
             "updatedAt" to now,
         )
@@ -70,15 +99,22 @@ class PostRemoteDataSourceImpl @Inject constructor(
         postId: String,
         authorId: String,
         authorName: String,
+        type: EcoType,
         message: String,
+        emoji: String?,
+        mediaUrl: String?,
     ) {
-        val eco = mapOf(
+        val ecoData = mutableMapOf<String, Any?>(
             "authorId" to authorId,
             "authorName" to authorName,
+            "type" to type.name,
             "message" to message,
+            "emoji" to emoji,
+            "mediaUrl" to mediaUrl,
             "createdAt" to System.currentTimeMillis(),
         )
-        firestore.collection(POSTS).document(postId).collection(ECOS).add(eco).await()
+        firestore.collection(POSTS).document(postId)
+            .collection(ECOS).add(ecoData).await()
         firestore.collection(POSTS).document(postId)
             .update("ecoCount", FieldValue.increment(1)).await()
     }

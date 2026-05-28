@@ -73,6 +73,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
     implementation(libs.timber)
 
     testImplementation(libs.junit)

@@ -53,6 +53,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+    implementation(libs.play.services.location)
+    implementation(libs.retrofit.core)
+    implementation(libs.retrofit.kotlin.serialization)
     implementation(libs.timber)
 
     testImplementation(libs.junit)

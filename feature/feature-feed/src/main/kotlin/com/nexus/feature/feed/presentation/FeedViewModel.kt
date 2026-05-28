@@ -8,6 +8,7 @@ import com.nexus.core.common.result.NexusResult
 import com.nexus.feature.feed.domain.model.Post
 import com.nexus.feature.feed.domain.usecase.GetFeedUseCase
 import com.nexus.feature.feed.domain.usecase.SendEcoUseCase
+import com.nexus.feature.feed.domain.usecase.ToggleReactionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,7 @@ import javax.inject.Inject
 class FeedViewModel @Inject constructor(
     getFeedUseCase: GetFeedUseCase,
     private val sendEcoUseCase: SendEcoUseCase,
+    private val toggleReactionUseCase: ToggleReactionUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FeedUiState())
@@ -38,6 +40,7 @@ class FeedViewModel @Inject constructor(
             is FeedIntent.OpenEcoSheet -> _uiState.update { it.copy(ecoTargetPostId = intent.postId) }
             FeedIntent.CloseEcoSheet -> _uiState.update { it.copy(ecoTargetPostId = null) }
             is FeedIntent.SendEco -> sendEco(intent.postId, intent.message)
+            is FeedIntent.ToggleReaction -> toggleReaction(intent.postId, intent.emoji)
             is FeedIntent.NavigateToPost -> viewModelScope.launch {
                 _events.send(FeedEvent.NavigateToPost(intent.postId))
             }
@@ -61,6 +64,15 @@ class FeedViewModel @Inject constructor(
                         it.copy(isEcoSending = false, error = result.exception.message)
                     }
                 }
+            }
+        }
+    }
+
+    private fun toggleReaction(postId: String, emoji: String) {
+        viewModelScope.launch {
+            when (val result = toggleReactionUseCase(postId, emoji)) {
+                is NexusResult.Success -> Unit
+                is NexusResult.Error -> _uiState.update { it.copy(error = result.exception.message) }
             }
         }
     }

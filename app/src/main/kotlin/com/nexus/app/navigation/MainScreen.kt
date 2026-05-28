@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
@@ -63,7 +63,7 @@ private val bottomNavItems = listOf(
     ),
     BottomNavItem(
         route = MessagesRoute,
-        icon = Icons.Outlined.Chat,
+        icon = Icons.AutoMirrored.Outlined.Chat,
         label = "Mensajes",
         isSelected = { dest -> dest?.hierarchy?.any { it.hasRoute(MessagesRoute::class) } == true },
     ),

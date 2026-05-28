@@ -11,5 +11,11 @@ data class Post(
     val ecoCount: Int,
     val createdAt: Long,
     val isOwnPost: Boolean,
-    val imageUrl: String? = null,
+    val imageUrls: List<String> = emptyList(),
+    val audioUrl: String? = null,
+    val fileUrl: String? = null,
+    val fileName: String? = null,
+    val mood: String? = null,
+    val locationName: String? = null,
+    val reactions: Map<String, Int> = emptyMap(),
 )

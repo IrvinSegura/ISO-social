@@ -12,6 +12,21 @@ class CreatePostUseCase @Inject constructor(
         content: String,
         circleId: String?,
         circleName: String?,
-        imageUri: Uri?,
-    ): NexusResult<String> = repository.createPost(content.trim(), circleId, circleName, imageUri)
+        imageUris: List<Uri>,
+        audioPath: String?,
+        fileUri: Uri?,
+        fileName: String?,
+        mood: String?,
+        locationName: String?,
+    ): NexusResult<String> = repository.createPost(
+        content = content.trim(),
+        circleId = circleId,
+        circleName = circleName,
+        imageUris = imageUris,
+        audioPath = audioPath,
+        fileUri = fileUri,
+        fileName = fileName,
+        mood = mood,
+        locationName = locationName,
+    )
 }

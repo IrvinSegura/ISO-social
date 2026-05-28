@@ -87,6 +87,9 @@ fun FeedScreen(
                                     post = post,
                                     onEcoClick = { viewModel.onIntent(FeedIntent.OpenEcoSheet(post.id)) },
                                     onClick = { viewModel.onIntent(FeedIntent.NavigateToPost(post.id)) },
+                                    onReactionClick = { emoji ->
+                                        viewModel.onIntent(FeedIntent.ToggleReaction(post.id, emoji))
+                                    },
                                 )
                             }
                         }

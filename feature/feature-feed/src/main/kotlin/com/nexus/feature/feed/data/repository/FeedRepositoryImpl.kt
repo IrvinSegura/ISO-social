@@ -41,14 +41,18 @@ class FeedRepositoryImpl @Inject constructor(
     }
 
     override suspend fun sendEco(postId: String, message: String): NexusResult<Unit> = safeCall {
-        val user = auth.currentUser
-            ?: error("Usuario no autenticado")
+        val user = auth.currentUser ?: error("Usuario no autenticado")
         remoteDataSource.sendEco(
             postId = postId,
             authorId = user.uid,
             authorName = user.displayName.orEmpty(),
             message = message,
         )
+    }
+
+    override suspend fun toggleReaction(postId: String, emoji: String): NexusResult<Unit> = safeCall {
+        val user = auth.currentUser ?: error("Usuario no autenticado")
+        remoteDataSource.toggleReaction(postId, user.uid, emoji)
     }
 
     companion object {
