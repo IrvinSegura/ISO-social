@@ -1,6 +1,6 @@
 package com.nexus.feature.post.presentation.detail
 
-import com.nexus.feature.post.data.model.TenorResult
+import com.nexus.feature.post.data.model.GiphyGif
 import com.nexus.feature.post.domain.model.EcoType
 import com.nexus.feature.post.domain.model.PostDetail
 
@@ -11,7 +11,7 @@ data class PostDetailUiState(
     val ecoSheetOpen: Boolean = false,
     val selectedEcoType: EcoType = EcoType.TEXT,
     val gifSearchQuery: String = "",
-    val gifResults: List<TenorResult> = emptyList(),
+    val gifResults: List<GiphyGif> = emptyList(),
     val isSearchingGifs: Boolean = false,
     val error: String? = null,
 )

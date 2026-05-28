@@ -69,10 +69,29 @@ class FeedViewModel @Inject constructor(
     }
 
     private fun toggleReaction(postId: String, emoji: String) {
+        // Actualización optimista inmediata
+        val previousReaction = _uiState.value.userReactions[postId]
+        val newReactions = _uiState.value.userReactions.toMutableMap()
+        if (previousReaction == emoji) {
+            newReactions.remove(postId) // Quitar reacción
+        } else {
+            newReactions[postId] = emoji // Nueva o diferente reacción
+        }
+        _uiState.update { it.copy(userReactions = newReactions) }
+
         viewModelScope.launch {
             when (val result = toggleReactionUseCase(postId, emoji)) {
                 is NexusResult.Success -> Unit
-                is NexusResult.Error -> _uiState.update { it.copy(error = result.exception.message) }
+                is NexusResult.Error -> {
+                    // Revertir si falla
+                    val reverted = _uiState.value.userReactions.toMutableMap()
+                    if (previousReaction != null) {
+                        reverted[postId] = previousReaction
+                    } else {
+                        reverted.remove(postId)
+                    }
+                    _uiState.update { it.copy(userReactions = reverted, error = result.exception.message) }
+                }
             }
         }
     }

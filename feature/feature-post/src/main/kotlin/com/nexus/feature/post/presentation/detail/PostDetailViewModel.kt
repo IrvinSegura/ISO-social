@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.nexus.core.common.result.NexusResult
-import com.nexus.feature.post.data.remote.TenorApi
+import com.nexus.feature.post.data.remote.GiphyApi
 import com.nexus.feature.post.domain.model.EcoType
 import com.nexus.feature.post.domain.usecase.GetPostDetailUseCase
 import com.nexus.feature.post.domain.usecase.SendEcoUseCase
@@ -25,7 +25,7 @@ class PostDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getPostDetailUseCase: GetPostDetailUseCase,
     private val sendEcoUseCase: SendEcoUseCase,
-    private val tenorApi: TenorApi,
+    private val giphyApi: GiphyApi,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle.toRoute<PostDetailRoute>().postId
@@ -38,7 +38,7 @@ class PostDetailViewModel @Inject constructor(
 
     init {
         loadPost()
-        searchGifs("") // Load featured GIFs initially
+        searchGifs("")
     }
 
     fun onIntent(intent: PostDetailIntent) {
@@ -95,13 +95,13 @@ class PostDetailViewModel @Inject constructor(
             _uiState.update { it.copy(isSearchingGifs = true, gifSearchQuery = query) }
             try {
                 val response = if (query.isBlank()) {
-                    tenorApi.featured()
+                    giphyApi.trending()
                 } else {
-                    tenorApi.search(query)
+                    giphyApi.search(query)
                 }
-                _uiState.update { it.copy(gifResults = response.results, isSearchingGifs = false) }
+                _uiState.update { it.copy(gifResults = response.data, isSearchingGifs = false) }
             } catch (_: Exception) {
-                _uiState.update { it.copy(isSearchingGifs = false) }
+                _uiState.update { it.copy(isSearchingGifs = false, gifResults = emptyList()) }
             }
         }
     }

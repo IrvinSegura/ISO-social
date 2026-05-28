@@ -43,13 +43,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.nexus.feature.post.data.model.TenorResult
+import com.nexus.feature.post.data.model.GiphyGif
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GifPickerSheet(
-    gifs: List<TenorResult>,
+    gifs: List<GiphyGif>,
     isLoading: Boolean,
     onSearch: (String) -> Unit,
     onGifSelected: (String) -> Unit,
@@ -58,7 +58,6 @@ fun GifPickerSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
 
-    // Debounced search
     LaunchedEffect(query) {
         delay(400)
         onSearch(query)

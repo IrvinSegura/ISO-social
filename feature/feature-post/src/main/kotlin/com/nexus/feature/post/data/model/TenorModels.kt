@@ -4,30 +4,30 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class TenorSearchResponse(
-    val results: List<TenorResult> = emptyList(),
-    val next: String = "",
+data class GiphySearchResponse(
+    val data: List<GiphyGif> = emptyList(),
 )
 
 @Serializable
-data class TenorResult(
+data class GiphyGif(
     val id: String = "",
     val title: String = "",
-    @SerialName("media_formats")
-    val mediaFormats: Map<String, TenorMediaFormat> = emptyMap(),
+    val images: GiphyImages = GiphyImages(),
 ) {
-    val previewUrl: String get() = mediaFormats["tinygif"]?.url
-        ?: mediaFormats["gif"]?.url
-        ?: ""
-
-    val fullUrl: String get() = mediaFormats["gif"]?.url
-        ?: mediaFormats["tinygif"]?.url
-        ?: ""
+    val previewUrl: String get() = images.fixedHeightSmall.url.ifBlank { images.original.url }
+    val fullUrl: String get() = images.original.url.ifBlank { images.fixedHeightSmall.url }
 }
 
 @Serializable
-data class TenorMediaFormat(
+data class GiphyImages(
+    @SerialName("fixed_height_small")
+    val fixedHeightSmall: GiphyImageItem = GiphyImageItem(),
+    val original: GiphyImageItem = GiphyImageItem(),
+)
+
+@Serializable
+data class GiphyImageItem(
     val url: String = "",
-    val dims: List<Int> = emptyList(),
-    val size: Long = 0L,
+    val width: String = "",
+    val height: String = "",
 )

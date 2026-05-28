@@ -3,6 +3,7 @@ package com.nexus.feature.feed.presentation
 data class FeedUiState(
     val isEcoSending: Boolean = false,
     val ecoTargetPostId: String? = null,
+    val userReactions: Map<String, String> = emptyMap(), // postId → emoji seleccionado
     val error: String? = null,
 )
 

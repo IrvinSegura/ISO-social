@@ -10,9 +10,12 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.coroutines.resume
+
+private const val LOCATION_TIMEOUT_MS = 10_000L
 
 class LocationHelper @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -22,9 +25,14 @@ class LocationHelper @Inject constructor(
     @SuppressLint("MissingPermission")
     suspend fun getCurrentCityName(): String? = try {
         val cts = CancellationTokenSource()
-        val location = fusedLocationClient
-            .getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
-            .await() ?: return null
+        val location = withTimeoutOrNull(LOCATION_TIMEOUT_MS) {
+            fusedLocationClient
+                .getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+                .await()
+        } ?: run {
+            cts.cancel()
+            return null
+        }
 
         val geocoder = Geocoder(context, Locale.getDefault())
 
