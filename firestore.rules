@@ -36,6 +36,19 @@ service cloud.firestore {
       }
     }
 
+    // ── Stories / Reels ─────────────────────────────────────────────────
+    match /stories/{storyId} {
+      allow read: if isAuth();
+      allow create: if isAuth()
+        && request.auth.uid == request.resource.data.authorId;
+      allow update, delete: if isAuth()
+        && request.auth.uid == resource.data.authorId;
+
+      match /seenBy/{userId} {
+        allow read, write: if isAuth();
+      }
+    }
+
     // ── Usuarios ────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isAuth();

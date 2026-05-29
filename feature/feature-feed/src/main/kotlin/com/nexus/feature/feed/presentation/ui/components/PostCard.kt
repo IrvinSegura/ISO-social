@@ -44,14 +44,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.nexus.core.ui.components.NexusAsyncImage
 import com.nexus.core.ui.theme.NexusAccentTeal
 import com.nexus.core.ui.theme.NexusPurple
 import com.nexus.feature.feed.domain.model.Post
@@ -65,6 +64,7 @@ private val PRESET_REACTIONS = listOf("❤️", "🤔", "💡", "🌱", "🔥")
 fun PostCard(
     post: Post,
     userReaction: String? = null,
+    ecoCountDelta: Int = 0,
     onEcoClick: () -> Unit,
     onClick: () -> Unit,
     onReactionClick: (String) -> Unit = {},
@@ -74,6 +74,17 @@ fun PostCard(
     val accentColor = avatarColor(post.authorName)
     val isDark = isSystemInDarkTheme()
     val hasImage = post.imageUrls.isNotEmpty()
+    val haptic = LocalHapticFeedback.current
+
+    // Cada interacción confirma con un "tick" táctil — se siente premium.
+    val onReactionHaptic: (String) -> Unit = { emoji ->
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        onReactionClick(emoji)
+    }
+    val onEcoHaptic: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        onEcoClick()
+    }
 
     // En claro: sombra coloreada. En oscuro: sin sombra, brilla por el tinte.
     val cardElevation = if (isDark) 0.dp else 2.dp
@@ -178,13 +189,13 @@ fun PostCard(
                 // ── REACCIONES ────────────────────────────────────────────
                 ReactionsBar(
                     reactions = post.reactions,
-                    ecoCount = post.ecoCount,
+                    ecoCount = post.ecoCount + ecoCountDelta,
                     userReaction = userReaction,
                     accentColor = accentColor,
                     isDark = isDark,
                     hasMedia = hasImage || post.audioUrl != null || post.fileUrl != null,
-                    onReactionClick = onReactionClick,
-                    onEcoClick = onEcoClick,
+                    onReactionClick = onReactionHaptic,
+                    onEcoClick = onEcoHaptic,
                 )
             }
         }
@@ -286,12 +297,12 @@ private fun StoryAvatar(
         )
         // Foto o inicial
         if (photoUrl != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(photoUrl).crossfade(true).build(),
+            NexusAsyncImage(
+                model = photoUrl,
                 contentDescription = name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(42.dp).clip(CircleShape),
+                shape = CircleShape,
+                fallbackInitial = name,
+                modifier = Modifier.size(42.dp),
             )
         } else {
             Box(
@@ -492,11 +503,9 @@ private fun PostImagesPager(imageUrls: List<String>, timestamp: Long) {
             .aspectRatio(4f / 3f),
     ) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrls[page]).crossfade(true).build(),
+            NexusAsyncImage(
+                model = imageUrls[page],
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         }

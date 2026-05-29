@@ -15,14 +15,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.nexus.core.ui.components.NexusAsyncImage
 import com.nexus.feature.post.domain.model.Eco
 import com.nexus.feature.post.domain.model.EcoType
 import java.text.SimpleDateFormat
@@ -70,17 +66,13 @@ fun EcoItem(
             }
             EcoType.GIF, EcoType.IMAGE -> {
                 eco.mediaUrl?.let { url ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(url)
-                            .crossfade(true)
-                            .build(),
+                    NexusAsyncImage(
+                        model = url,
                         contentDescription = if (eco.type == EcoType.GIF) "GIF" else "Imagen",
-                        contentScale = ContentScale.Crop,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth(0.6f)
-                            .aspectRatio(1.5f)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .aspectRatio(1.5f),
                     )
                 }
             }

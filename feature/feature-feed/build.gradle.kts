@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -7,12 +10,22 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val localPropsFile = rootProject.file("local.properties")
+val localProps = Properties().also { props ->
+    if (localPropsFile.exists()) FileInputStream(localPropsFile).use { props.load(it) }
+}
+
 android {
     namespace = "com.nexus.feature.feed"
     compileSdk = 35
 
     defaultConfig {
         minSdk = 26
+
+        buildConfigField("String", "SPOTIFY_CLIENT_ID",
+            "\"${localProps.getProperty("SPOTIFY_CLIENT_ID", "")}\"")
+        buildConfigField("String", "SPOTIFY_CLIENT_SECRET",
+            "\"${localProps.getProperty("SPOTIFY_CLIENT_SECRET", "")}\"")
     }
 
     compileOptions {
@@ -26,6 +39,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -61,6 +75,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
     implementation(libs.timber)
 
     testImplementation(libs.junit)

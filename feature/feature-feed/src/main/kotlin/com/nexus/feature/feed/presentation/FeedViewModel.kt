@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import com.nexus.core.common.event.NewPostEventBus
 import com.nexus.core.common.result.NexusResult
 import com.nexus.feature.feed.domain.model.Post
 import com.nexus.feature.feed.domain.usecase.GetFeedUseCase
@@ -25,6 +26,7 @@ class FeedViewModel @Inject constructor(
     getFeedUseCase: GetFeedUseCase,
     private val sendEcoUseCase: SendEcoUseCase,
     private val toggleReactionUseCase: ToggleReactionUseCase,
+    private val newPostEventBus: NewPostEventBus,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FeedUiState())
@@ -34,6 +36,57 @@ class FeedViewModel @Inject constructor(
     val events = _events.receiveAsFlow()
 
     val posts: Flow<PagingData<Post>> = getFeedUseCase().cachedIn(viewModelScope)
+
+    init {
+        observeNewPosts()
+    }
+
+    private fun observeNewPosts() {
+        viewModelScope.launch {
+            newPostEventBus.events.collect { payload ->
+                when {
+                    // Nuevo post optimista → añadir al inicio inmediatamente
+                    payload.isPending -> {
+                        val pending = PendingPost(
+                            tempId = payload.tempId,
+                            authorName = payload.authorName,
+                            authorPhotoUrl = payload.authorPhotoUrl,
+                            content = payload.content,
+                            mood = payload.mood,
+                            locationName = payload.locationName,
+                            createdAt = payload.createdAt,
+                        )
+                        _uiState.update { state ->
+                            state.copy(pendingPosts = listOf(pending) + state.pendingPosts)
+                        }
+                    }
+                    // Post fallido (confirmedId == null) → marcar FAILED para reintentar
+                    payload.confirmedId == null -> {
+                        _uiState.update { state ->
+                            state.copy(
+                                pendingPosts = state.pendingPosts.map { p ->
+                                    if (p.tempId == payload.tempId) p.copy(status = PendingPostStatus.FAILED)
+                                    else p
+                                },
+                            )
+                        }
+                    }
+                    // Confirmado por servidor → quitar de pendientes
+                    else -> {
+                        _uiState.update { state ->
+                            state.copy(
+                                pendingPosts = state.pendingPosts.filter { it.tempId != payload.tempId },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun clearPendingPosts() {
+        _uiState.update { it.copy(pendingPosts = emptyList()) }
+    }
 
     fun onIntent(intent: FeedIntent) {
         when (intent) {
@@ -52,16 +105,26 @@ class FeedViewModel @Inject constructor(
     }
 
     private fun sendEco(postId: String, message: String) {
+        // Incremento optimista inmediato
+        _uiState.update { state ->
+            val deltas = state.ecoCountDeltas.toMutableMap()
+            deltas[postId] = (deltas[postId] ?: 0) + 1
+            state.copy(isEcoSending = true, ecoCountDeltas = deltas)
+        }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isEcoSending = true) }
             when (val result = sendEcoUseCase(postId, message)) {
                 is NexusResult.Success -> {
                     _uiState.update { it.copy(isEcoSending = false, ecoTargetPostId = null) }
                     _events.send(FeedEvent.EcoSent)
                 }
                 is NexusResult.Error -> {
-                    _uiState.update {
-                        it.copy(isEcoSending = false, error = result.exception.message)
+                    // Revertir delta si falla
+                    _uiState.update { state ->
+                        val deltas = state.ecoCountDeltas.toMutableMap()
+                        val current = deltas[postId] ?: 1
+                        if (current <= 1) deltas.remove(postId) else deltas[postId] = current - 1
+                        state.copy(isEcoSending = false, ecoCountDeltas = deltas, error = result.exception.message)
                     }
                 }
             }
