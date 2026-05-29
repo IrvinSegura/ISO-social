@@ -65,6 +65,7 @@ private val PRESET_REACTIONS = listOf("❤️", "🤔", "💡", "🌱", "🔥")
 fun PostCard(
     post: Post,
     userReaction: String? = null,
+    ecoCountDelta: Int = 0,
     onEcoClick: () -> Unit,
     onClick: () -> Unit,
     onReactionClick: (String) -> Unit = {},
@@ -178,7 +179,7 @@ fun PostCard(
                 // ── REACCIONES ────────────────────────────────────────────
                 ReactionsBar(
                     reactions = post.reactions,
-                    ecoCount = post.ecoCount,
+                    ecoCount = post.ecoCount + ecoCountDelta,
                     userReaction = userReaction,
                     accentColor = accentColor,
                     isDark = isDark,

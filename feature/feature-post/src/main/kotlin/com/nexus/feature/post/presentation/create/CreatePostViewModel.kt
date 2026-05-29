@@ -3,6 +3,8 @@ package com.nexus.feature.post.presentation.create
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.nexus.core.common.event.NewPostEventBus
+import com.nexus.core.common.event.NewPostPayload
 import com.nexus.core.common.result.NexusResult
 import com.nexus.feature.post.domain.usecase.CreatePostUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 private const val MAX_CONTENT_LENGTH = 500
@@ -26,6 +29,7 @@ class CreatePostViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     private val audioRecorderManager: AudioRecorderManager,
     private val locationHelper: LocationHelper,
+    private val newPostEventBus: NewPostEventBus,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreatePostUiState())
@@ -192,8 +196,30 @@ class CreatePostViewModel @Inject constructor(
             else -> PublishingStep.SavingPost
         }
 
+        val tempId = "pending_${UUID.randomUUID()}"
+        val user = auth.currentUser
+
         viewModelScope.launch {
             _uiState.update { it.copy(publishingStep = step, contentError = null) }
+
+            // Emitir el post optimista ANTES de subir — aparece en el feed al instante
+            newPostEventBus.emitPending(
+                NewPostPayload(
+                    tempId = tempId,
+                    authorId = user?.uid.orEmpty(),
+                    authorName = user?.displayName.orEmpty(),
+                    authorPhotoUrl = user?.photoUrl?.toString(),
+                    content = content,
+                    mood = state.selectedMood,
+                    locationName = state.locationName,
+                    createdAt = System.currentTimeMillis(),
+                    isPending = true,
+                )
+            )
+
+            // Navegar de vuelta inmediatamente, el upload sigue en background
+            _events.send(CreatePostEvent.PostCreated)
+            _uiState.update { it.copy(publishingStep = PublishingStep.Idle) }
 
             val result = createPostUseCase(
                 content = content,
@@ -209,13 +235,12 @@ class CreatePostViewModel @Inject constructor(
 
             when (result) {
                 is NexusResult.Success -> {
-                    _uiState.update { it.copy(publishingStep = PublishingStep.Idle) }
-                    _events.send(CreatePostEvent.PostCreated)
+                    // Confirmar: quita el pendiente y el feed ya tiene el post real de Firestore
+                    newPostEventBus.emitConfirmed(tempId, result.data)
                 }
                 is NexusResult.Error -> {
-                    _uiState.update {
-                        it.copy(publishingStep = PublishingStep.Idle, error = result.exception.message)
-                    }
+                    // Marcar como fallido para que el usuario pueda reintentar
+                    newPostEventBus.emitFailed(tempId)
                 }
             }
         }

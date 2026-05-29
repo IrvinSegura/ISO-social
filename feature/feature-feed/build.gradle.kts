@@ -13,6 +13,14 @@ android {
 
     defaultConfig {
         minSdk = 26
+
+        val localProps = rootProject.file("local.properties")
+            .takeIf { it.exists() }
+            ?.let { java.util.Properties().apply { load(it.inputStream()) } }
+        buildConfigField("String", "SPOTIFY_CLIENT_ID",
+            "\"${localProps?.getProperty("SPOTIFY_CLIENT_ID", "") ?: ""}\"")
+        buildConfigField("String", "SPOTIFY_CLIENT_SECRET",
+            "\"${localProps?.getProperty("SPOTIFY_CLIENT_SECRET", "") ?: ""}\"")
     }
 
     compileOptions {
@@ -26,6 +34,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -61,6 +70,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
     implementation(libs.timber)
 
     testImplementation(libs.junit)
