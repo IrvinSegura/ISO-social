@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +10,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val localPropsFile = rootProject.file("local.properties")
+val localProps = Properties().also { props ->
+    if (localPropsFile.exists()) FileInputStream(localPropsFile).use { props.load(it) }
+}
+
 android {
     namespace = "com.nexus.feature.feed"
     compileSdk = 35
@@ -14,13 +22,10 @@ android {
     defaultConfig {
         minSdk = 26
 
-        val localProps = rootProject.file("local.properties")
-            .takeIf { it.exists() }
-            ?.let { java.util.Properties().apply { load(it.inputStream()) } }
         buildConfigField("String", "SPOTIFY_CLIENT_ID",
-            "\"${localProps?.getProperty("SPOTIFY_CLIENT_ID", "") ?: ""}\"")
+            "\"${localProps.getProperty("SPOTIFY_CLIENT_ID", "")}\"")
         buildConfigField("String", "SPOTIFY_CLIENT_SECRET",
-            "\"${localProps?.getProperty("SPOTIFY_CLIENT_SECRET", "") ?: ""}\"")
+            "\"${localProps.getProperty("SPOTIFY_CLIENT_SECRET", "")}\"")
     }
 
     compileOptions {

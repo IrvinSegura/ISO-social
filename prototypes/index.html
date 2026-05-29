@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus — PostCard Ambos Modos</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0a0916;
+  color: #F0EEFF;
+  padding: 20px 10px 80px;
+}
+
+h1 {
+  text-align: center; font-size: 20px; font-weight: 900;
+  background: linear-gradient(135deg, #6C63FF, #00D4AA);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+.sub { text-align: center; color: rgba(240,238,255,0.4); font-size: 12px; margin-bottom: 24px; }
+
+.row { display: flex; gap: 12px; max-width: 820px; margin: 0 auto; }
+.col { flex: 1; min-width: 0; }
+.col-label {
+  text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; margin-bottom: 10px; padding: 4px 0;
+  border-radius: 20px;
+}
+.dark-label { color: #6C63FF; background: rgba(108,99,255,0.1); }
+.light-label { color: #5C5A7A; background: rgba(92,90,122,0.08); }
+
+/* ── Phone shell ── */
+.phone {
+  border-radius: 40px;
+  padding: 12px 6px 18px;
+  border: 1.5px solid;
+}
+.phone-dark {
+  background: #07060f;
+  border-color: rgba(108,99,255,0.2);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+}
+.phone-light {
+  background: #e8e8f0;
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+}
+.notch {
+  width: 90px; height: 20px; margin: 0 auto 8px;
+  border-radius: 10px;
+}
+.notch-dark { background: #07060f; border: 1px solid rgba(255,255,255,0.06); }
+.notch-light { background: #e8e8f0; border: 1px solid rgba(0,0,0,0.06); }
+
+.screen { border-radius: 28px; overflow: hidden; padding: 6px 0 12px; }
+.screen-dark { background: #0f0e1c; }
+.screen-light { background: #F2F1F9; }
+
+/* ── DARK CARD ── */
+.card-d {
+  margin: 5px 7px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #1a1929;
+  position: relative;
+}
+.tint-d {
+  position: absolute; top: 0; left: 0; right: 0; height: 88px;
+  pointer-events: none;
+}
+
+/* ── LIGHT CARD ── */
+.card-l {
+  margin: 5px 7px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #FFFFFF;
+  position: relative;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+}
+.tint-l {
+  position: absolute; top: 0; left: 0; right: 0; height: 88px;
+  pointer-events: none;
+}
+
+/* ── Common inner ── */
+.card-inner { position: relative; }
+.header { display: flex; align-items: center; padding: 12px 12px 5px; gap: 10px; }
+
+/* Avatar */
+.av-wrap { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
+.av-ring { position: absolute; inset: 0; border-radius: 50%; }
+.av-gap-d { position: absolute; width: 41px; height: 41px; border-radius: 50%; background: #1a1929; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.av-gap-l { position: absolute; width: 41px; height: 41px; border-radius: 50%; background: #FFFFFF; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.av-core {
+  position: absolute; width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 900; color: white;
+  top: 50%; left: 50%; transform: translate(-50%,-50%);
+}
+
+.name-d { font-size: 14px; font-weight: 800; color: #F0EEFF; letter-spacing: -0.3px; }
+.name-l { font-size: 14px; font-weight: 800; color: #1a1830; letter-spacing: -0.3px; }
+.meta { display: flex; align-items: center; gap: 3px; margin-top: 2px; font-size: 10.5px; }
+.meta-d { color: rgba(240,238,255,0.45); }
+.meta-l { color: rgba(26,24,48,0.45); }
+.meta-dot { width: 2.5px; height: 2.5px; border-radius: 50%; display: inline-block; }
+.meta-dot-d { background: rgba(240,238,255,0.25); }
+.meta-dot-l { background: rgba(26,24,48,0.25); }
+.circle-teal { color: #00D4AA; font-weight: 700; }
+
+.mood {
+  padding: 3px 8px; border-radius: 20px;
+  font-size: 9.5px; font-weight: 700; margin-left: auto;
+}
+
+.content-d {
+  padding: 3px 14px 10px; font-size: 13.5px; line-height: 21px;
+  color: rgba(240,238,255,0.86);
+}
+.content-l {
+  padding: 3px 14px 10px; font-size: 13.5px; line-height: 21px;
+  color: rgba(26,24,48,0.82);
+}
+
+/* Image area */
+.img-area {
+  width: 100%; aspect-ratio: 4/3; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 42px;
+}
+.img-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, transparent 55%, rgba(0,0,0,0.65));
+}
+.img-date {
+  position: absolute; bottom: 9px; right: 10px;
+  background: rgba(0,0,0,0.32); backdrop-filter: blur(4px);
+  padding: 2px 7px; border-radius: 7px;
+  font-size: 9.5px; font-weight: 600; color: rgba(255,255,255,0.9);
+}
+.dots { position: absolute; bottom: 10px; left: 10px; display: flex; gap: 4px; align-items: center; }
+.dot-pill { width: 18px; height: 5px; border-radius: 3px; }
+.dot-sm { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.35); }
+
+/* Divider */
+.divider { height: 0.8px; margin: 0 12px; }
+
+/* Reactions */
+.reactions { display: flex; align-items: center; gap: 4px; padding: 8px 9px 10px; }
+.pill {
+  display: flex; align-items: center; gap: 2px;
+  padding: 6px 8px; border-radius: 50px;
+  font-size: 15px; cursor: pointer;
+  transition: transform 0.15s cubic-bezier(.34,1.56,.64,1);
+}
+.pill:hover { transform: scale(1.18); }
+.pill-active { color: white; }
+.cnt { font-size: 10px; font-weight: 700; }
+.eco {
+  margin-left: auto; display: flex; align-items: center; gap: 4px;
+  padding: 6px 11px; border-radius: 50px;
+  font-size: 11px; font-weight: 500; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h1>✦ Nexus PostCard</h1>
+<p class="sub">Dark mode vs Light mode — mismo diseño, ambos perfectos</p>
+
+<div class="row">
+
+  <!-- ══ DARK MODE ══ -->
+  <div class="col">
+    <div class="col-label dark-label">🌙 Dark Mode</div>
+    <div class="phone phone-dark">
+      <div class="notch notch-dark"></div>
+      <div class="screen screen-dark">
+
+        <!-- Card 1 dark — imagen + mood + location -->
+        <div class="card-d">
+          <div class="tint-d" style="background:linear-gradient(180deg,rgba(108,99,255,0.14),transparent)"></div>
+          <div class="card-inner">
+            <div class="header">
+              <div class="av-wrap">
+                <div class="av-ring" style="background:linear-gradient(135deg,#6C63FF,#00D4AA)"></div>
+                <div class="av-gap-d"></div>
+                <div class="av-core" style="background:linear-gradient(135deg,#6C63FF,#00D4AA)">I</div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="name-d">Irvin Segura</span>
+                  <div class="mood" style="background:rgba(108,99,255,0.22);color:rgba(140,133,255,0.95)">😌 En paz</div>
+                </div>
+                <div class="meta meta-d">
+                  <span>16m</span><span class="meta-dot meta-dot-d"></span>
+                  <span style="font-size:9px">📍</span><span>Monterrey</span>
+                  <span class="meta-dot meta-dot-d"></span>
+                  <span class="circle-teal">#Nexus</span>
+                </div>
+              </div>
+            </div>
+            <div class="content-d">Hola como están todos, me siento muy bien hoy 🌿</div>
+            <div class="img-area" style="background:linear-gradient(135deg,#1e1b4b,#0d3330)">
+              🏙️
+              <div class="img-overlay"></div>
+              <div class="img-date">28.05.2026</div>
+              <div class="dots">
+                <div class="dot-pill" style="background:linear-gradient(90deg,#6C63FF,#00D4AA)"></div>
+                <div class="dot-sm"></div>
+              </div>
+            </div>
+            <div class="divider" style="background:linear-gradient(90deg,transparent,rgba(108,99,255,0.35),rgba(0,212,170,0.25),transparent)"></div>
+            <div class="reactions">
+              <div class="pill pill-active" style="background:linear-gradient(135deg,#6C63FF,#00D4AA)">❤️<span class="cnt">3</span></div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">🤔</div>
+              <div class="pill" style="background:rgba(108,99,255,0.15)">💡<span class="cnt" style="color:#8C85FF">1</span></div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">🌱</div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">🔥</div>
+              <div class="eco" style="background:rgba(255,255,255,0.06);color:rgba(240,238,255,0.45)">💬 Eco</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2 dark — solo texto -->
+        <div class="card-d">
+          <div class="tint-d" style="background:linear-gradient(180deg,rgba(233,30,140,0.13),transparent)"></div>
+          <div class="card-inner">
+            <div class="header">
+              <div class="av-wrap">
+                <div class="av-ring" style="background:linear-gradient(135deg,#E91E8C,#9C27B0)"></div>
+                <div class="av-gap-d"></div>
+                <div class="av-core" style="background:linear-gradient(135deg,#E91E8C,#9C27B0)">I</div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div class="name-d">Irvin Segura</div>
+                <div class="meta meta-d"><span>37m</span></div>
+              </div>
+            </div>
+            <div class="content-d">Esto es prueba de envío asíncrono 🚀</div>
+            <div class="divider" style="background:linear-gradient(90deg,transparent,rgba(233,30,140,0.3),rgba(156,39,176,0.2),transparent)"></div>
+            <div class="reactions">
+              <div class="pill" style="background:rgba(233,30,140,0.14)">❤️<span class="cnt" style="color:#E91E8C">1</span></div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">🤔</div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">💡</div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">🌱</div>
+              <div class="pill" style="background:rgba(255,255,255,0.06)">🔥</div>
+              <div class="eco" style="background:rgba(255,255,255,0.06);color:rgba(240,238,255,0.45)">💬 Eco</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ LIGHT MODE ══ -->
+  <div class="col">
+    <div class="col-label light-label">☀️ Light Mode</div>
+    <div class="phone phone-light">
+      <div class="notch notch-light"></div>
+      <div class="screen screen-light">
+
+        <!-- Card 1 light -->
+        <div class="card-l">
+          <div class="tint-l" style="background:linear-gradient(180deg,rgba(108,99,255,0.09),transparent)"></div>
+          <div class="card-inner">
+            <div class="header">
+              <div class="av-wrap">
+                <div class="av-ring" style="background:linear-gradient(135deg,#6C63FF,#00D4AA)"></div>
+                <div class="av-gap-l"></div>
+                <div class="av-core" style="background:linear-gradient(135deg,#6C63FF,#00D4AA)">I</div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="name-l">Irvin Segura</span>
+                  <div class="mood" style="background:rgba(108,99,255,0.12);color:#6C63FF">😌 En paz</div>
+                </div>
+                <div class="meta meta-l">
+                  <span>16m</span><span class="meta-dot meta-dot-l"></span>
+                  <span style="font-size:9px">📍</span><span>Monterrey</span>
+                  <span class="meta-dot meta-dot-l"></span>
+                  <span class="circle-teal">#Nexus</span>
+                </div>
+              </div>
+            </div>
+            <div class="content-l">Hola como están todos, me siento muy bien hoy 🌿</div>
+            <div class="img-area" style="background:linear-gradient(135deg,#d4d0f5,#c0e8e0)">
+              🏙️
+              <div class="img-overlay"></div>
+              <div class="img-date">28.05.2026</div>
+              <div class="dots">
+                <div class="dot-pill" style="background:linear-gradient(90deg,#6C63FF,#00D4AA)"></div>
+                <div class="dot-sm"></div>
+              </div>
+            </div>
+            <div class="divider" style="background:linear-gradient(90deg,transparent,rgba(108,99,255,0.25),rgba(0,212,170,0.18),transparent)"></div>
+            <div class="reactions">
+              <div class="pill pill-active" style="background:linear-gradient(135deg,#6C63FF,#00D4AA)">❤️<span class="cnt">3</span></div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">🤔</div>
+              <div class="pill" style="background:rgba(108,99,255,0.1)">💡<span class="cnt" style="color:#6C63FF">1</span></div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">🌱</div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">🔥</div>
+              <div class="eco" style="background:rgba(0,0,0,0.05);color:rgba(26,24,48,0.4)">💬 Eco</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2 light -->
+        <div class="card-l">
+          <div class="tint-l" style="background:linear-gradient(180deg,rgba(233,30,140,0.08),transparent)"></div>
+          <div class="card-inner">
+            <div class="header">
+              <div class="av-wrap">
+                <div class="av-ring" style="background:linear-gradient(135deg,#E91E8C,#9C27B0)"></div>
+                <div class="av-gap-l"></div>
+                <div class="av-core" style="background:linear-gradient(135deg,#E91E8C,#9C27B0)">I</div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div class="name-l">Irvin Segura</div>
+                <div class="meta meta-l"><span>37m</span></div>
+              </div>
+            </div>
+            <div class="content-l">Esto es prueba de envío asíncrono 🚀</div>
+            <div class="divider" style="background:linear-gradient(90deg,transparent,rgba(233,30,140,0.22),rgba(156,39,176,0.15),transparent)"></div>
+            <div class="reactions">
+              <div class="pill" style="background:rgba(233,30,140,0.1)">❤️<span class="cnt" style="color:#E91E8C">1</span></div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">🤔</div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">💡</div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">🌱</div>
+              <div class="pill" style="background:rgba(0,0,0,0.05)">🔥</div>
+              <div class="eco" style="background:rgba(0,0,0,0.05);color:rgba(26,24,48,0.4)">💬 Eco</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
