@@ -2,6 +2,8 @@ package com.nexus.feature.feed.presentation.ui.story
 
 import android.media.MediaPlayer
 import android.media.audiofx.LoudnessEnhancer
+import org.json.JSONObject
+import java.net.URL
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +65,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.nexus.core.ui.components.NexusAsyncImage
 import com.nexus.feature.feed.domain.model.Story
 import com.nexus.feature.feed.domain.model.StoryType
 import kotlinx.coroutines.delay
@@ -361,10 +364,9 @@ private fun StoryContent(
                 )
             }
             story.type == StoryType.IMAGE && story.mediaUrl != null -> {
-                AsyncImage(
+                NexusAsyncImage(
                     model = story.mediaUrl,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -392,64 +394,99 @@ private fun StoryContent(
 
 @Composable
 private fun MusicChip(story: Story, isPaused: Boolean) {
-    // Todos los hooks deben estar fuera de cualquier condicional (regla de Compose)
-    var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
-    val hasMusic = !story.musicPreviewUrl.isNullOrBlank()
+    val hasMusic = !story.musicTitle.isNullOrBlank()
+    if (!hasMusic) return
 
-    val mediaPlayer = remember(story.musicPreviewUrl) {
-        if (story.musicPreviewUrl != null) {
-            MediaPlayer().apply {
-                setAudioAttributes(
-                    android.media.AudioAttributes.Builder()
-                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                        .build()
-                )
-                setDataSource(story.musicPreviewUrl)
-                setVolume(1f, 1f)
-                prepareAsync()
-                setOnPreparedListener { mp ->
-                    loudnessEnhancer = LoudnessEnhancer(mp.audioSessionId).apply {
-                        setTargetGain(800)
-                        enabled = true
-                    }
-                    mp.seekTo(story.musicStartMs.toInt())
-                    if (!isPaused) mp.start()
+    // URL resuelta: puede ser la guardada (iTunes) o buscada en tiempo real si es Deezer/vacía
+    var resolvedUrl by remember(story.id) { mutableStateOf<String?>(story.musicPreviewUrl) }
+
+    LaunchedEffect(story.id) {
+        val stored = story.musicPreviewUrl
+        val isDeezer = stored?.contains("dzcdn.net") == true
+        val isEmpty = stored.isNullOrBlank()
+        // Si es URL vieja de Deezer o no hay URL, buscar en iTunes con título+artista
+        if ((isDeezer || isEmpty) && !story.musicTitle.isNullOrBlank()) {
+            val q = java.net.URLEncoder.encode(
+                "${story.musicTitle} ${story.musicArtist.orEmpty()}", "UTF-8"
+            )
+            val url = "https://itunes.apple.com/search?term=$q&media=music&limit=1&country=MX"
+            runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val json = org.json.JSONObject(java.net.URL(url).readText())
+                    val results = json.getJSONArray("results")
+                    if (results.length() > 0) {
+                        results.getJSONObject(0).optString("previewUrl").ifBlank { null }
+                    } else null
                 }
-            }
-        } else null
+            }.getOrNull()?.let { resolvedUrl = it }
+        }
     }
 
-    // Pausa/reanuda respetando el punto de inicio elegido
-    LaunchedEffect(isPaused) {
+    var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
+
+    val mediaPlayer = remember(resolvedUrl) {
+        val url = resolvedUrl ?: return@remember null
+        MediaPlayer().apply {
+            setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+            setDataSource(url)
+            setVolume(0f, 0f)
+            prepareAsync()
+            setOnPreparedListener { mp ->
+                loudnessEnhancer = LoudnessEnhancer(mp.audioSessionId).apply {
+                    setTargetGain(400)
+                    enabled = true
+                }
+                if (!isPaused) {
+                    mp.seekTo(story.musicStartMs.toInt())
+                    mp.start()
+                }
+            }
+            // Si la URL falla (expirada), limpiar para que el LaunchedEffect no reintente la misma
+            setOnErrorListener { _, _, _ ->
+                resolvedUrl = null
+                true
+            }
+        }
+    }
+
+    // Pausa/reanuda con fade-in para evitar el "pop"
+    LaunchedEffect(isPaused, resolvedUrl) {
         val mp = mediaPlayer ?: return@LaunchedEffect
         if (isPaused) {
             if (mp.isPlaying) mp.pause()
         } else {
             if (!mp.isPlaying) {
+                mp.setVolume(0f, 0f)
                 mp.seekTo(story.musicStartMs.toInt())
                 mp.start()
+                repeat(20) { i ->
+                    delay(8)
+                    mp.setVolume((i + 1) / 20f, (i + 1) / 20f)
+                }
             }
         }
     }
 
-    // Detiene la reproducción al acabar la duración elegida
-    LaunchedEffect(isPaused) {
+    // Detiene al acabar la duración elegida
+    LaunchedEffect(isPaused, resolvedUrl) {
         if (!isPaused && mediaPlayer != null) {
             delay(story.musicDurationMs)
             if (mediaPlayer.isPlaying) mediaPlayer.pause()
         }
     }
 
-    DisposableEffect(story.musicPreviewUrl) {
+    DisposableEffect(resolvedUrl) {
         onDispose {
             loudnessEnhancer?.release()
             mediaPlayer?.stop()
             mediaPlayer?.release()
         }
     }
-
-    if (!hasMusic) return
 
     Row(
         modifier = Modifier

@@ -25,13 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import com.nexus.core.ui.components.NexusAsyncImage
+import com.nexus.core.ui.theme.NexusAccentTeal
+import com.nexus.core.ui.theme.NexusPurple
 import com.nexus.feature.feed.domain.model.Story
 
 @Composable
@@ -120,10 +121,11 @@ private fun StoryGroupItem(
     onClick: () -> Unit,
 ) {
     val representative = group.first()
+    val seenColor = MaterialTheme.colorScheme.outlineVariant
     val ringBrush = if (hasUnseen) {
-        Brush.sweepGradient(listOf(Color(0xFF6C63FF), Color(0xFF00D4AA), Color(0xFF6C63FF)))
+        Brush.sweepGradient(listOf(NexusPurple, NexusAccentTeal, NexusPurple))
     } else {
-        Brush.sweepGradient(listOf(Color(0xFF444466), Color(0xFF444466)))
+        Brush.sweepGradient(listOf(seenColor, seenColor))
     }
     val hasReel = group.any { it.type.name == "REEL" }
 
@@ -145,13 +147,12 @@ private fun StoryGroupItem(
             contentAlignment = Alignment.Center,
         ) {
             if (representative.authorAvatarUrl != null) {
-                AsyncImage(
+                NexusAsyncImage(
                     model = representative.authorAvatarUrl,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(58.dp)
-                        .clip(CircleShape),
+                    shape = CircleShape,
+                    fallbackInitial = representative.authorName,
+                    modifier = Modifier.size(58.dp),
                 )
             } else {
                 Text(
@@ -167,7 +168,7 @@ private fun StoryGroupItem(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .background(Color(0xFF6C63FF), CircleShape)
+                        .background(NexusPurple, CircleShape)
                         .padding(horizontal = 4.dp, vertical = 1.dp),
                 ) {
                     Text(text = "▶", fontSize = 7.sp, color = Color.White)

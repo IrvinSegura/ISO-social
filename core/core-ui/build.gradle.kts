@@ -32,4 +32,7 @@ dependencies {
     implementation(libs.bundles.compose.core)
     implementation(libs.androidx.ui.tooling.preview)
     debugImplementation(libs.androidx.ui.tooling)
+
+    // Carga de imágenes — el design system es dueño del estado de carga
+    implementation(libs.coil.compose)
 }

@@ -15,6 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.nexus.core.ui.components.AppearOnce
+import com.nexus.core.ui.components.EcoCelebration
+import com.nexus.core.ui.theme.NexusAccentTeal
+import com.nexus.core.ui.theme.NexusPurple
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +57,7 @@ import com.nexus.feature.feed.presentation.StoryEvent
 import com.nexus.feature.feed.presentation.StoryIntent
 import com.nexus.feature.feed.presentation.StoryViewModel
 import com.nexus.feature.feed.presentation.ui.components.EcoBottomSheet
+import com.nexus.feature.feed.presentation.ui.components.FeedSkeleton
 import com.nexus.feature.feed.presentation.ui.components.PendingPostCard
 import com.nexus.feature.feed.presentation.ui.components.PostCard
 import com.nexus.feature.feed.presentation.ui.components.StoriesRow
@@ -71,6 +78,7 @@ fun FeedScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showStoryCreator by remember { mutableStateOf(false) }
+    var showEcoCelebration by remember { mutableStateOf(false) }
     // Lista del grupo seleccionado + índice de inicio dentro de ese grupo
     var storyViewerData by remember { mutableStateOf<Pair<List<com.nexus.feature.feed.domain.model.Story>, Int>?>(null) }
 
@@ -102,7 +110,7 @@ fun FeedScreen(
             when (event) {
                 is FeedEvent.NavigateToPost -> onNavigateToPost(event.postId)
                 FeedEvent.NavigateToCreatePost -> Unit
-                FeedEvent.EcoSent -> snackbarHostState.showSnackbar("¡Eco publicado!")
+                FeedEvent.EcoSent -> showEcoCelebration = true
             }
         }
     }
@@ -145,11 +153,7 @@ fun FeedScreen(
     ) {
         when {
             posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0 -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp,
-                )
+                FeedSkeleton(modifier = Modifier.padding(top = 8.dp))
             }
 
             posts.loadState.refresh is LoadState.Error && posts.itemCount == 0 -> {
@@ -200,17 +204,31 @@ fun FeedScreen(
                         ) { index ->
                             val post = posts[index]
                             if (post != null) {
-                                PostCard(
-                                    post = post,
-                                    userReaction = uiState.userReactions[post.id],
-                                    ecoCountDelta = uiState.ecoCountDeltas[post.id] ?: 0,
-                                    onEcoClick = { viewModel.onIntent(FeedIntent.OpenEcoSheet(post.id)) },
-                                    onClick = { viewModel.onIntent(FeedIntent.NavigateToPost(post.id)) },
-                                    onReactionClick = { emoji ->
-                                        viewModel.onIntent(FeedIntent.ToggleReaction(post.id, emoji))
-                                    },
-                                )
+                                // Entrada en cascada: las primeras tarjetas ascienden
+                                // escalonadas; el retraso se acota para no penalizar
+                                // el scroll en posiciones lejanas.
+                                AppearOnce(delayMillis = (index * 45).coerceAtMost(200)) {
+                                    PostCard(
+                                        post = post,
+                                        userReaction = uiState.userReactions[post.id],
+                                        ecoCountDelta = uiState.ecoCountDeltas[post.id] ?: 0,
+                                        onEcoClick = { viewModel.onIntent(FeedIntent.OpenEcoSheet(post.id)) },
+                                        onClick = { viewModel.onIntent(FeedIntent.NavigateToPost(post.id)) },
+                                        onReactionClick = { emoji ->
+                                            viewModel.onIntent(FeedIntent.ToggleReaction(post.id, emoji))
+                                        },
+                                    )
+                                }
                             }
+                        }
+
+                        // Feed sin publicaciones (y sin nada subiendo) → invitación, no vacío
+                        if (posts.itemCount == 0 &&
+                            uiState.pendingPosts.isEmpty() &&
+                            posts.loadState.refresh is LoadState.NotLoading &&
+                            posts.loadState.append.endOfPaginationReached
+                        ) {
+                            item { FeedEmptyState() }
                         }
 
                         if (posts.loadState.append is LoadState.Loading) {
@@ -290,6 +308,57 @@ fun FeedScreen(
                 onDismiss = { storyViewerData = null },
             )
         }
+    }
+
+    EcoCelebration(
+        visible = showEcoCelebration,
+        onFinished = { showEcoCelebration = false },
+    )
+}
+
+@Composable
+private fun FeedEmptyState(
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp, vertical = 56.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Emblema con gradiente de marca
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            NexusPurple.copy(alpha = 0.18f),
+                            NexusAccentTeal.copy(alpha = 0.14f),
+                        ),
+                    ),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = "🌱", fontSize = 44.sp)
+        }
+        Spacer(Modifier.height(22.dp))
+        Text(
+            text = "Aquí nace el diálogo",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Todavía no hay publicaciones. Comparte una idea, una pregunta o un momento — sin métricas, sin ruido. Solo lo que de verdad quieres decir.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            lineHeight = 21.sp,
+        )
     }
 }
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -531,15 +532,19 @@ private fun MusicPickerSheet(
         isSearching = true
         searchJob = scope.launch {
             delay(400)
-            results = searchSpotify(query)
+            results = searchMusic(query)
             isSearching = false
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.85f)
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp),
         ) {
@@ -601,8 +606,21 @@ private fun MusicPickerSheet(
 
             Spacer(Modifier.height(8.dp))
 
+            if (query.isNotBlank() && !isSearching && results.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Sin resultados para \"$query\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(bottom = 16.dp),
             ) {
                 items(results) { entry ->
@@ -649,12 +667,21 @@ private fun MusicPickerSheet(
                                 maxLines = 1,
                             )
                         }
-                        if (entry.previewUrl.isNullOrBlank()) {
-                            Text(
-                                text = "Sin preview",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            )
+                        Column(horizontalAlignment = Alignment.End) {
+                            if (entry.trackDurationMs > 0) {
+                                Text(
+                                    text = entry.trackDurationFormatted,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (entry.previewUrl.isNullOrBlank()) {
+                                Text(
+                                    text = "Sin preview",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                )
+                            }
                         }
                     }
                 }
@@ -698,9 +725,8 @@ private fun MusicTrimSheet(
                 setDataSource(entry.previewUrl)
                 setVolume(1f, 1f)
                 setOnPreparedListener { mp ->
-                    // Boost ~8 dB para igualar el nivel percibido con otras apps
                     loudnessEnhancer = LoudnessEnhancer(mp.audioSessionId).apply {
-                        setTargetGain(800)
+                        setTargetGain(400)
                         enabled = true
                     }
                     isPrepared = true
@@ -730,7 +756,17 @@ private fun MusicTrimSheet(
         }
     }
 
+    suspend fun fadeIn(mp: MediaPlayer, targetVol: Float = volume) {
+        val steps = 20
+        repeat(steps) { i ->
+            val v = ((i + 1).toFloat() / steps) * targetVol
+            mp.setVolume(v, v)
+            delay(8)
+        }
+    }
+
     fun stopPlayback() {
+        mediaPlayer?.setVolume(0f, 0f)
         mediaPlayer?.pause()
         isPlaying = false
         playingFull = false
@@ -739,11 +775,13 @@ private fun MusicTrimSheet(
     fun playFull() {
         mediaPlayer ?: return
         if (!isPrepared) return
+        mediaPlayer.setVolume(0f, 0f)
         mediaPlayer.seekTo(0)
         mediaPlayer.start()
         isPlaying = true
         playingFull = true
         scope.launch {
+            fadeIn(mediaPlayer)
             delay(previewMaxSec.toLong() * 1000)
             if (isPlaying && playingFull) stopPlayback()
         }
@@ -752,11 +790,13 @@ private fun MusicTrimSheet(
     fun playSelection() {
         mediaPlayer ?: return
         if (!isPrepared) return
+        mediaPlayer.setVolume(0f, 0f)
         mediaPlayer.seekTo((startSec * 1000).toInt())
         mediaPlayer.start()
         isPlaying = true
         playingFull = false
         scope.launch {
+            fadeIn(mediaPlayer)
             delay((durationSec * 1000).roundToLong())
             if (isPlaying && !playingFull) stopPlayback()
         }
@@ -993,6 +1033,73 @@ private fun MusicTrimSheet(
 
             Spacer(Modifier.height(12.dp))
 
+            // ── Info del track + abrir en Spotify ────────────────────────
+            if (entry.spotifyUrl != null || entry.trackDurationMs > 0) {
+                val context = LocalContext.current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1DB954).copy(alpha = 0.12f))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    // Logo Spotify (círculo verde)
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1DB954)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Outlined.MusicNote, null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Spotify",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1DB954),
+                        )
+                        if (entry.trackDurationMs > 0) {
+                            Text(
+                                text = "Duración completa: ${entry.trackDurationFormatted}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (entry.spotifyUrl != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF1DB954))
+                                .clickable {
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(entry.spotifyUrl),
+                                    )
+                                    context.startActivity(intent)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = "Abrir",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
             Button(
                 onClick = {
                     stopPlayback()
@@ -1170,8 +1277,8 @@ private fun formatSeconds(seconds: Float): String {
     return if (m > 0) "${m}:${s.toString().padStart(2, '0')}" else "${s}s"
 }
 
-private suspend fun searchSpotify(query: String): List<MusicEntry> =
-    SpotifyService.searchTracks(query)
+private suspend fun searchMusic(query: String): List<MusicEntry> =
+    MusicService.searchTracks(query)
 
 @Composable
 private fun ActionChip(
@@ -1219,10 +1326,19 @@ data class MusicEntry(
     val artist: String,
     val previewUrl: String?,
     val albumArtUrl: String? = null,
+    val spotifyUrl: String? = null,
+    val spotifyUri: String? = null,
+    val trackDurationMs: Long = 0L,
     val startMs: Long = 0L,
     val durationMs: Long = 30_000L,
 ) {
     val displayTitle get() = "$title · $artist"
+    val trackDurationFormatted: String get() {
+        val totalSec = (trackDurationMs / 1000).toInt()
+        val m = totalSec / 60
+        val s = totalSec % 60
+        return "$m:${s.toString().padStart(2, '0')}"
+    }
 }
 
 private fun createTempFileUri(context: Context, isVideo: Boolean): Uri {

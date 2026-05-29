@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,16 +53,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.nexus.core.ui.components.AppearOnce
+import com.nexus.core.ui.components.EcoCelebration
+import com.nexus.core.ui.components.NexusAsyncImage
 import com.nexus.core.ui.components.NexusButton
 import com.nexus.feature.post.domain.model.EcoType
 import com.nexus.feature.post.domain.model.PostDetail
@@ -85,6 +83,7 @@ fun PostDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showEcoCelebration by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -95,7 +94,7 @@ fun PostDetailScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                PostDetailEvent.EcoSent -> snackbarHostState.showSnackbar("Eco enviado")
+                PostDetailEvent.EcoSent -> showEcoCelebration = true
             }
         }
     }
@@ -228,6 +227,11 @@ fun PostDetailScreen(
             )
         }
     }
+
+    EcoCelebration(
+        visible = showEcoCelebration,
+        onFinished = { showEcoCelebration = false },
+    )
 }
 
 @Composable
@@ -428,13 +432,9 @@ private fun PostDetailContent(post: PostDetail) {
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f),
                     ) { page ->
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(post.imageUrls[page])
-                                .crossfade(true)
-                                .build(),
+                        NexusAsyncImage(
+                            model = post.imageUrls[page],
                             contentDescription = "Imagen ${page + 1}",
-                            contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -511,8 +511,10 @@ private fun PostDetailContent(post: PostDetail) {
                 )
             }
         } else {
-            items(post.ecos, key = { it.id }) { eco ->
-                EcoItem(eco = eco)
+            itemsIndexed(post.ecos, key = { _, eco -> eco.id }) { index, eco ->
+                AppearOnce(delayMillis = (index * 45).coerceAtMost(200)) {
+                    EcoItem(eco = eco)
+                }
             }
         }
 
