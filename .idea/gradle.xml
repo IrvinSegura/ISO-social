@@ -6,7 +6,6 @@
       <GradleProjectSettings>
         <option name="testRunner" value="CHOOSE_PER_TEST" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
-        <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
@@ -14,9 +13,17 @@
             <option value="$PROJECT_DIR$/core" />
             <option value="$PROJECT_DIR$/core/core-common" />
             <option value="$PROJECT_DIR$/core/core-datastore" />
+            <option value="$PROJECT_DIR$/core/core-firebase" />
+            <option value="$PROJECT_DIR$/core/core-giphy" />
+            <option value="$PROJECT_DIR$/core/core-storage" />
             <option value="$PROJECT_DIR$/core/core-ui" />
             <option value="$PROJECT_DIR$/feature" />
             <option value="$PROJECT_DIR$/feature/feature-auth" />
+            <option value="$PROJECT_DIR$/feature/feature-circles" />
+            <option value="$PROJECT_DIR$/feature/feature-feed" />
+            <option value="$PROJECT_DIR$/feature/feature-messages" />
+            <option value="$PROJECT_DIR$/feature/feature-post" />
+            <option value="$PROJECT_DIR$/feature/feature-profile" />
           </set>
         </option>
       </GradleProjectSettings>
