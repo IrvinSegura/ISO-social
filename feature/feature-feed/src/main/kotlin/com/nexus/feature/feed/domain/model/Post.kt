@@ -17,5 +17,8 @@ data class Post(
     val fileName: String? = null,
     val mood: String? = null,
     val locationName: String? = null,
+    /** A GIF or animated emoji from Giphy. */
+    val gifUrl: String? = null,
     val reactions: Map<String, Int> = emptyMap(),
+    val myReaction: String? = null,
 )
