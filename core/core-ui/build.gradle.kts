@@ -35,4 +35,7 @@ dependencies {
 
     // Carga de imágenes — el design system es dueño del estado de carga
     implementation(libs.coil.compose)
+    implementation(libs.timber)
+
+    testImplementation(libs.junit)
 }
