@@ -12,7 +12,28 @@
           "package_name": "com.nexus.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1004397164459-f1tgjd1j2thvgek64bjt89ig9a5blgu3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nexus.app",
+            "certificate_hash": "d925e90241f75fe4bbee65124ebf28136b17eba7"
+          }
+        },
+        {
+          "client_id": "1004397164459-r5osebd37ivevvs8bneck0qa0b9hpdar.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nexus.app",
+            "certificate_hash": "a9a9491ee3238d6244b18febd75779498f8effd6"
+          }
+        },
+        {
+          "client_id": "1004397164459-mqm9s9f26a7m61nc9hphc70e42n4kamv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCx9XfeotPiXeNryMmqkUjD_J5mCsy5z54"
@@ -20,7 +41,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1004397164459-mqm9s9f26a7m61nc9hphc70e42n4kamv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

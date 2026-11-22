@@ -13,6 +13,7 @@ import com.nexus.feature.auth.domain.model.User
 import com.nexus.feature.auth.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 
 class AuthRepositoryImpl @Inject constructor(
@@ -41,6 +42,8 @@ class AuthRepositoryImpl @Inject constructor(
         remoteDataSource.signOut()
         sessionDataStore.clearSession()
         NexusResult.Success(Unit)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         NexusResult.Error(NexusException.UnknownException(e))
     }
@@ -48,6 +51,8 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun sendEmailVerification(): NexusResult<Unit> = try {
         remoteDataSource.sendEmailVerification()
         NexusResult.Success(Unit)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         NexusResult.Error(e.toNexusException())
     }
@@ -64,6 +69,8 @@ class AuthRepositoryImpl @Inject constructor(
         NexusResult.Error(NexusException.WeakPasswordException())
     } catch (e: NexusException) {
         NexusResult.Error(e)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         NexusResult.Error(NexusException.UnknownException(e))
     }

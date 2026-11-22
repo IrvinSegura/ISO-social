@@ -43,11 +43,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import timber.log.Timber
 import com.nexus.core.ui.components.GoogleSignInButton
 import com.nexus.core.ui.components.NexusButton
 import com.nexus.core.ui.components.NexusTextField
@@ -236,14 +240,14 @@ private fun launchGoogleSignIn(
     onTokenReceived: (String) -> Unit,
 ) {
     val credentialManager = CredentialManager.create(activity)
-    val googleIdOption = GetGoogleIdOption.Builder()
-        .setFilterByAuthorizedAccounts(false)
-        .setServerClientId(AuthConstants.GOOGLE_WEB_CLIENT_ID)
-        .setAutoSelectEnabled(false)
+    // The "Sign in with Google" option is the one meant for an explicit button: unlike
+    // GetGoogleIdOption (the one-tap sheet), it also works when the device has no Google
+    // account yet, letting the user add one instead of failing with NoCredentialException
+    val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(AuthConstants.GOOGLE_WEB_CLIENT_ID)
         .build()
 
     val request = GetCredentialRequest.Builder()
-        .addCredentialOption(googleIdOption)
+        .addCredentialOption(signInWithGoogleOption)
         .build()
 
     scope.launch {
@@ -253,10 +257,24 @@ private fun launchGoogleSignIn(
             if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
                 onTokenReceived(googleCredential.idToken)
+            } else {
+                Timber.w("Unexpected credential type: %s", credential.type)
+                snackbarHostState.showSnackbar("No se pudo iniciar sesión con Google.")
             }
+        } catch (e: GetCredentialCancellationException) {
+            // Usually the user closed the dialog, so no snackbar. Play Services also reports
+            // config errors (e.g. UNREGISTERED_ON_API_CONSOLE: SHA-1 missing) as a cancellation,
+            // so it is still logged for debugging
+            Timber.d(e, "Google sign-in cancelled: %s", e.message)
+        } catch (e: NoCredentialException) {
+            Timber.w(e, "Google sign-in: no credential")
+            snackbarHostState.showSnackbar("Agrega una cuenta de Google al dispositivo e inténtalo de nuevo.")
         } catch (e: GetCredentialException) {
-            android.util.Log.e("GoogleSignIn", "Failed: ${e::class.simpleName} - ${e.message}", e)
-            snackbarHostState.showSnackbar("Google sign-in failed. Please try again.")
+            Timber.e(e, "Google sign-in failed: %s", e.type)
+            snackbarHostState.showSnackbar("No se pudo iniciar sesión con Google. Inténtalo de nuevo.")
+        } catch (e: GoogleIdTokenParsingException) {
+            Timber.e(e, "Google sign-in: invalid ID token")
+            snackbarHostState.showSnackbar("No se pudo iniciar sesión con Google. Inténtalo de nuevo.")
         }
     }
 }
