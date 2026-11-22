@@ -4,41 +4,74 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nexus.feature.feed.domain.usecase.CreateStoryUseCase
 import com.nexus.feature.feed.domain.usecase.GetStoriesUseCase
+import com.nexus.feature.feed.domain.usecase.MarkStorySeenUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import timber.log.Timber
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 
 @HiltViewModel
 class StoryViewModel @Inject constructor(
     private val getStoriesUseCase: GetStoriesUseCase,
     private val createStoryUseCase: CreateStoryUseCase,
+    private val markStorySeenUseCase: MarkStorySeenUseCase,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(StoryUiState())
-    val uiState: StateFlow<StoryUiState> = _uiState.asStateFlow()
+    // Everything except the stories themselves, which come from the listener below
+    private val _uiState = MutableStateFlow(StoryUiState(me = getStoriesUseCase.me()))
+
+    // Stories marked as seen on this device before Firestore confirms it
+    private val locallySeen = MutableStateFlow(emptySet<String>())
+
+    private val remoteStories = getStoriesUseCase()
+        // A dead listener closes the flow; re-subscribe a few times with backoff
+        // (transient network errors) before giving up and showing the error
+        .retryWhen { cause, attempt ->
+            if (cause is CancellationException || attempt >= MAX_STORY_RETRIES) {
+                false
+            } else {
+                delay(STORY_RETRY_BASE_MS shl attempt.toInt())
+                true
+            }
+        }
+        .catch { e ->
+            _uiState.update { it.copy(error = e.message) }
+            // combine only emits once every source has a value: without this, a listener
+            // that fails before its first snapshot would never show the error.
+            // A later failure keeps the stories already on screen
+            if (uiState.value.stories.isEmpty()) emit(emptyList())
+        }
+
+    // WhileSubscribed: the Firestore listeners stop 5 s after the feed leaves the screen
+    // (app in background), instead of billing reads for as long as the ViewModel lives.
+    // The last stories stay in the state, so coming back shows no empty flash
+    val uiState: StateFlow<StoryUiState> =
+        combine(_uiState, remoteStories, locallySeen) { state, stories, seen ->
+            state.copy(
+                stories = stories.map { s ->
+                    if (s.id in seen && !s.hasBeenSeen) s.copy(hasBeenSeen = true) else s
+                },
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            initialValue = StoryUiState(),
+        )
 
     private val _events = Channel<StoryEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
-
-    init {
-        observeStories()
-    }
-
-    private fun observeStories() {
-        viewModelScope.launch {
-            getStoriesUseCase()
-                .catch { e -> _uiState.update { it.copy(error = e.message) } }
-                .collect { stories -> _uiState.update { it.copy(stories = stories) } }
-        }
-    }
 
     fun onIntent(intent: StoryIntent) {
         when (intent) {
@@ -76,14 +109,25 @@ class StoryViewModel @Inject constructor(
     }
 
     private fun markSeen(storyId: String) {
+        val story = uiState.value.stories.firstOrNull { it.id == storyId }
+        if (story == null || story.hasBeenSeen) return
+
+        // Optimista: se marca al instante; el listener de Firestore lo confirma después
+        locallySeen.update { it + storyId }
         viewModelScope.launch {
-            _uiState.update { state ->
-                state.copy(
-                    stories = state.stories.map { story ->
-                        if (story.id == storyId) story.copy(hasBeenSeen = true) else story
-                    },
-                )
+            try {
+                markStorySeenUseCase(storyId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "No se pudo marcar la historia como vista")
             }
         }
+    }
+
+    private companion object {
+        const val MAX_STORY_RETRIES = 3L
+        const val STORY_RETRY_BASE_MS = 2_000L
+        const val STOP_TIMEOUT_MS = 5_000L
     }
 }

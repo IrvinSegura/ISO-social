@@ -3,6 +3,7 @@ package com.nexus.feature.feed.presentation.di
 import android.content.Context
 import androidx.room.Room
 import com.nexus.feature.feed.data.local.db.FeedDatabase
+import com.nexus.feature.feed.data.local.db.FeedMigrations
 import com.nexus.feature.feed.data.remote.FeedRemoteDataSource
 import com.nexus.feature.feed.data.remote.FeedRemoteDataSourceImpl
 import com.nexus.feature.feed.data.repository.FeedRepositoryImpl
@@ -33,7 +34,8 @@ abstract class FeedModule {
         @Singleton
         fun provideFeedDatabase(@ApplicationContext context: Context): FeedDatabase =
             Room.databaseBuilder(context, FeedDatabase::class.java, "nexus_feed_db")
-                .fallbackToDestructiveMigration()
+                .addMigrations(*FeedMigrations.ALL)
+                .fallbackToDestructiveMigrationFrom(*FeedMigrations.VERSIONS_WITHOUT_MIGRATION)
                 .build()
     }
 }

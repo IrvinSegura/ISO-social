@@ -3,11 +3,13 @@ package com.nexus.feature.feed.presentation
 import com.nexus.feature.feed.domain.model.Story
 import com.nexus.feature.feed.domain.model.StoryGradient
 import com.nexus.feature.feed.domain.model.StoryType
+import com.nexus.feature.feed.domain.repository.StoryMe
 
 data class StoryUiState(
     val stories: List<Story> = emptyList(),
     val isCreating: Boolean = false,
     val error: String? = null,
+    val me: StoryMe? = null,
 )
 
 sealed interface StoryIntent {
