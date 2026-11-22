@@ -17,10 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import com.nexus.core.firebase.post.ReportReason
 import com.nexus.core.ui.components.AppearOnce
+import com.nexus.core.ui.components.ReportDialog
 import com.nexus.core.ui.components.EcoCelebration
-import com.nexus.core.ui.theme.NexusAccentTeal
-import com.nexus.core.ui.theme.NexusPurple
+import com.nexus.core.ui.components.NexusEmptyState
+import com.nexus.core.ui.components.NexusPageHeader
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Spa
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +58,6 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.nexus.feature.feed.presentation.FeedEvent
 import com.nexus.feature.feed.presentation.FeedIntent
 import com.nexus.feature.feed.presentation.FeedViewModel
-import com.nexus.feature.feed.presentation.PendingPostStatus
 import com.nexus.feature.feed.presentation.StoryEvent
 import com.nexus.feature.feed.presentation.StoryIntent
 import com.nexus.feature.feed.presentation.StoryViewModel
@@ -64,6 +69,9 @@ import com.nexus.feature.feed.presentation.ui.components.StoriesRow
 import com.nexus.feature.feed.presentation.ui.story.StoryCreatorSheet
 import com.nexus.feature.feed.presentation.ui.story.StoryViewerScreen
 
+// About one screenful of cards: enough for the cascade on first load
+private const val ANIMATED_ITEMS = 6
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
@@ -74,6 +82,9 @@ fun FeedScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val storyUiState by storyViewModel.uiState.collectAsStateWithLifecycle()
     val posts = viewModel.posts.collectAsLazyPagingItems()
+    val savedPostIds by viewModel.savedPostIds.collectAsStateWithLifecycle()
+    // Post being reported; saveable so the dialog survives rotation
+    var reportTargetId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -82,24 +93,10 @@ fun FeedScreen(
     // Lista del grupo seleccionado + índice de inicio dentro de ese grupo
     var storyViewerData by remember { mutableStateOf<Pair<List<com.nexus.feature.feed.domain.model.Story>, Int>?>(null) }
 
-    // Al volver al feed limpia los pending confirmados y sincroniza con Paging3
+    // The ViewModel decides whether the feed is old enough to reload (FeedEvent.RefreshFeed)
     DisposableEffect(lifecycleOwner) {
-        var isFirstResume = true
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                if (isFirstResume) {
-                    isFirstResume = false
-                } else {
-                    // Solo refrescamos si no hay pendientes subiendo (ya están en pantalla)
-                    if (viewModel.uiState.value.pendingPosts.none {
-                            it.status == PendingPostStatus.UPLOADING
-                        }
-                    ) {
-                        viewModel.clearPendingPosts()
-                        posts.refresh()
-                    }
-                }
-            }
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.onIntent(FeedIntent.ScreenResumed)
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -111,6 +108,8 @@ fun FeedScreen(
                 is FeedEvent.NavigateToPost -> onNavigateToPost(event.postId)
                 FeedEvent.NavigateToCreatePost -> Unit
                 FeedEvent.EcoSent -> showEcoCelebration = true
+                FeedEvent.RefreshFeed -> posts.refresh()
+                is FeedEvent.ShowMessage -> snackbarHostState.showSnackbar(event.text)
             }
         }
     }
@@ -166,23 +165,27 @@ fun FeedScreen(
             else -> {
                 PullToRefreshBox(
                     isRefreshing = posts.loadState.refresh is LoadState.Loading,
-                    onRefresh = { posts.refresh() },
+                    onRefresh = { viewModel.onIntent(FeedIntent.Refresh) },
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp),
                     ) {
+                        item(key = "header") {
+                            FeedHeader(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+                        }
                         item {
                             StoriesRow(
                                 stories = storyUiState.stories,
+                                me = storyUiState.me,
                                 onAddStory = { showStoryCreator = true },
                                 onStoryGroupClick = { group, startIndex ->
                                     storyViewerData = group to startIndex
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
+                                    .padding(top = 20.dp, bottom = 12.dp),
                             )
                         }
 
@@ -191,10 +194,11 @@ fun FeedScreen(
                             count = uiState.pendingPosts.size,
                             key = { index -> uiState.pendingPosts[index].tempId },
                         ) { index ->
+                            val pending = uiState.pendingPosts[index]
                             PendingPostCard(
-                                post = uiState.pendingPosts[index],
-                                onRetry = { /* TODO: reintentar publicación */ },
-                                onDismiss = { viewModel.clearPendingPosts() },
+                                post = pending,
+                                onRetry = { viewModel.onIntent(FeedIntent.RetryPendingPost(pending.tempId)) },
+                                onDismiss = { viewModel.onIntent(FeedIntent.DismissPendingPost(pending.tempId)) },
                             )
                         }
 
@@ -207,16 +211,18 @@ fun FeedScreen(
                                 // Entrada en cascada: las primeras tarjetas ascienden
                                 // escalonadas; el retraso se acota para no penalizar
                                 // el scroll en posiciones lejanas.
-                                AppearOnce(delayMillis = (index * 45).coerceAtMost(200)) {
+                                // Only the first screenful cascades in; cards reached by scrolling show at once
+                                AppearOnce(delayMillis = (index * 45).coerceAtMost(200), enabled = index < ANIMATED_ITEMS) {
                                     PostCard(
                                         post = post,
-                                        userReaction = uiState.userReactions[post.id],
-                                        ecoCountDelta = uiState.ecoCountDeltas[post.id] ?: 0,
                                         onEcoClick = { viewModel.onIntent(FeedIntent.OpenEcoSheet(post.id)) },
                                         onClick = { viewModel.onIntent(FeedIntent.NavigateToPost(post.id)) },
                                         onReactionClick = { emoji ->
                                             viewModel.onIntent(FeedIntent.ToggleReaction(post.id, emoji))
                                         },
+                                        isSaved = post.id in savedPostIds,
+                                        onSaveClick = { viewModel.onIntent(FeedIntent.ToggleSave(post.id)) },
+                                        onReportClick = { reportTargetId = post.id },
                                     )
                                 }
                             }
@@ -259,12 +265,23 @@ fun FeedScreen(
         )
     }
 
-    if (uiState.ecoTargetPostId != null) {
+    reportTargetId?.let { postId ->
+        ReportDialog(
+            reasons = ReportReason.entries.map { it.label },
+            onDismiss = { reportTargetId = null },
+            onSubmit = { index, details ->
+                reportTargetId = null
+                viewModel.onIntent(FeedIntent.ReportPost(postId, ReportReason.entries[index], details))
+            },
+        )
+    }
+
+    uiState.ecoTargetPostId?.let { targetPostId ->
         EcoBottomSheet(
             isLoading = uiState.isEcoSending,
             onDismiss = { viewModel.onIntent(FeedIntent.CloseEcoSheet) },
             onSend = { message ->
-                viewModel.onIntent(FeedIntent.SendEco(uiState.ecoTargetPostId!!, message))
+                viewModel.onIntent(FeedIntent.SendEco(targetPostId, message))
             },
         )
     }
@@ -316,50 +333,24 @@ fun FeedScreen(
     )
 }
 
+/** Same page header as the other tabs. */
 @Composable
-private fun FeedEmptyState(
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 40.dp, vertical = 56.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        // Emblema con gradiente de marca
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            NexusPurple.copy(alpha = 0.18f),
-                            NexusAccentTeal.copy(alpha = 0.14f),
-                        ),
-                    ),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "🌱", fontSize = 44.sp)
-        }
-        Spacer(Modifier.height(22.dp))
-        Text(
-            text = "Aquí nace el diálogo",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Todavía no hay publicaciones. Comparte una idea, una pregunta o un momento — sin métricas, sin ruido. Solo lo que de verdad quieres decir.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            lineHeight = 21.sp,
-        )
-    }
+private fun FeedHeader(modifier: Modifier = Modifier) {
+    NexusPageHeader(
+        title = "Inicio",
+        subtitle = "Lo más reciente de tu comunidad: reacciona o responde con un eco.",
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun FeedEmptyState() {
+    NexusEmptyState(
+        icon = Icons.Outlined.Spa,
+        title = "Aquí nace el diálogo",
+        message = "Todavía no hay publicaciones. Comparte una idea, una pregunta o un momento: " +
+            "sin métricas, sin ruido.",
+    )
 }
 
 @Composable
@@ -367,28 +358,12 @@ private fun FeedErrorState(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = "😕", fontSize = 48.sp)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "No se pudo cargar el feed",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Comprueba tu conexión e intenta de nuevo",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(20.dp))
-        TextButton(onClick = onRetry) {
-            Text("Reintentar", fontWeight = FontWeight.SemiBold)
-        }
-    }
+    NexusEmptyState(
+        icon = Icons.Outlined.CloudOff,
+        title = "No se pudo cargar el feed",
+        message = "Comprueba tu conexión e inténtalo de nuevo.",
+        actionLabel = "Reintentar",
+        onAction = onRetry,
+        modifier = modifier,
+    )
 }
