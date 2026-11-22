@@ -15,17 +15,33 @@ val localProps = Properties().also { props ->
     if (localPropsFile.exists()) FileInputStream(localPropsFile).use { props.load(it) }
 }
 
+// Room exports each schema version here: it is the reference for writing and testing migrations
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.nexus.feature.feed"
     compileSdk = 35
 
     defaultConfig {
         minSdk = 26
+    }
 
-        buildConfigField("String", "SPOTIFY_CLIENT_ID",
-            "\"${localProps.getProperty("SPOTIFY_CLIENT_ID", "")}\"")
-        buildConfigField("String", "SPOTIFY_CLIENT_SECRET",
-            "\"${localProps.getProperty("SPOTIFY_CLIENT_SECRET", "")}\"")
+    // A client secret inside an APK can be extracted by anyone, so it is only compiled
+    // into debug builds. Release falls back to iTunes until the Spotify token is
+    // requested from a backend (e.g. a Cloud Function).
+    buildTypes {
+        debug {
+            buildConfigField("String", "SPOTIFY_CLIENT_ID",
+                "String.valueOf(\"${localProps.getProperty("SPOTIFY_CLIENT_ID", "")}\")")
+            buildConfigField("String", "SPOTIFY_CLIENT_SECRET",
+                "String.valueOf(\"${localProps.getProperty("SPOTIFY_CLIENT_SECRET", "")}\")")
+        }
+        release {
+            buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"\"")
+            buildConfigField("String", "SPOTIFY_CLIENT_SECRET", "\"\"")
+        }
     }
 
     compileOptions {
@@ -47,6 +63,7 @@ dependencies {
     implementation(project(":core:core-common"))
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-firebase"))
+    implementation(project(":core:core-storage"))
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

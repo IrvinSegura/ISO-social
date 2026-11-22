@@ -1,5 +1,6 @@
 package com.nexus.feature.feed.data.model
 
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 
 data class StoryDto(
@@ -20,5 +21,7 @@ data class StoryDto(
     val sharedPostId: String? = null,
     val createdAt: Long = 0L,
     val expiresAt: Long = 0L,
+    // Same instant as expiresAt, as a Timestamp: the Firestore TTL policy deletes by it
+    val expireAt: Timestamp? = null,
     val views: Int = 0,
 )
