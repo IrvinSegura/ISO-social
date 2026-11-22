@@ -11,6 +11,9 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+}
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -27,11 +30,14 @@ include(":app")
 include(":core:core-common")
 include(":core:core-ui")
 include(":core:core-datastore")
-include(":core:core-network")
-include(":core:core-database")
 include(":core:core-firebase")
+include(":core:core-storage")
+include(":core:core-giphy")
 
 // Feature modules
 include(":feature:feature-auth")
 include(":feature:feature-feed")
 include(":feature:feature-post")
+include(":feature:feature-profile")
+include(":feature:feature-circles")
+include(":feature:feature-messages")

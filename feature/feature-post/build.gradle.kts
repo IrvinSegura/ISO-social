@@ -33,6 +33,8 @@ dependencies {
     implementation(project(":core:core-common"))
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-firebase"))
+    implementation(project(":core:core-storage"))
+    implementation(project(":core:core-giphy"))
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -55,8 +57,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.play.services.location)
-    implementation(libs.retrofit.core)
-    implementation(libs.retrofit.kotlin.serialization)
     implementation(libs.timber)
 
     testImplementation(libs.junit)

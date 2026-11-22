@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -39,13 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nexus.core.ui.theme.NexusAccentTeal
-import com.nexus.core.ui.theme.NexusPurple
+import com.nexus.core.ui.theme.NexusAccent
 
 private const val MAX_ECO_LENGTH = 300
 
@@ -94,10 +91,10 @@ fun EcoBottomSheet(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(NexusPurple, NexusAccentTeal))),
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
                 ) {
-                    Text("✦", fontSize = 20.sp, color = Color.White)
+                    Text("✦", fontSize = 20.sp, color = NexusAccent)
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
@@ -137,10 +134,10 @@ fun EcoBottomSheet(
                     fontSize = 15.sp,
                     lineHeight = 24.sp,
                 ),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NexusPurple.copy(alpha = 0.6f),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    focusedBorderColor = NexusAccent,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
@@ -162,16 +159,14 @@ fun EcoBottomSheet(
                 )
                 Spacer(Modifier.weight(1f))
 
-                // Send button — gradient when active
+                // Send button — the blog's dark primary button when active
                 Box(
                     modifier = Modifier
                         .scale(buttonScale)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .then(
                             if (hasText && !isLoading) {
-                                Modifier.background(
-                                    Brush.linearGradient(listOf(NexusPurple, NexusAccentTeal)),
-                                )
+                                Modifier.background(MaterialTheme.colorScheme.primary)
                             } else {
                                 Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             },
@@ -189,7 +184,7 @@ fun EcoBottomSheet(
                     if (isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp,
                         )
                     } else {
@@ -201,7 +196,7 @@ fun EcoBottomSheet(
                                 text = "Publicar eco",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (hasText) Color.White
+                                color = if (hasText) MaterialTheme.colorScheme.onPrimary
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                 letterSpacing = (-0.2).sp,
                             )
@@ -209,7 +204,7 @@ fun EcoBottomSheet(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = if (hasText) Color.White
+                                tint = if (hasText) MaterialTheme.colorScheme.onPrimary
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }

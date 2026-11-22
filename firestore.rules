@@ -2,57 +2,676 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Shared helpers ──────────────────────────────────────────────────
+
     function isAuth() {
       return request.auth != null;
     }
 
-    // ── Posts ────────────────────────────────────────────────────────────
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function nowMillis() {
+      return request.time.toMillis();
+    }
+
+    // Client timestamps may lag (offline queue) but never point to the future,
+    // otherwise a post could pin itself to the top of the feed
+    function isRecentMillis(ts) {
+      return ts is int
+        && ts <= nowMillis() + 300000
+        && ts >= nowMillis() - 86400000;
+    }
+
+    function isOptionalString(value, maxSize) {
+      return value == null || (value is string && value.size() <= maxSize);
+    }
+
+    // GIFs and animated emoji are linked from Giphy's own hosts, never uploaded
+    function isGiphyUrl(url) {
+      return url is string
+        && url.size() <= 2048
+        && url.matches('^https://([a-z0-9-]+\\.)*giphy\\.com/.+');
+    }
+
+    // Media lives in the public "media" bucket of our Supabase project (supabase/storage-setup.sql).
+    // Pinned to that project, so URLs from anyone else's Supabase project are rejected.
+    // SETUP: replace SUPABASE_PROJECT_REF with the project ref (the xxxx of https://xxxx.supabase.co)
+    function storageUrlPrefix() {
+      return '^https://uqqisriirtejtkzwwumh\\.supabase\\.co/storage/v1/object/public/media/';
+    }
+
+    function isStorageUrl(url) {
+      return url is string
+        && url.size() <= 2048
+        && url.matches(storageUrlPrefix() + '.+');
+    }
+
+    // Public URL of a file inside the given folder.
+    // folder is built from document ids, which must be plain alphanumerics (see posts create)
+    function isStorageUrlIn(url, folder) {
+      return isStorageUrl(url)
+        && url.matches(storageUrlPrefix() + folder + '/.+');
+    }
+
+    // Profile photos come from Google sign-in or from our own Storage
+    function isAvatarUrl(url) {
+      return url == null
+        || (url is string
+            && url.size() <= 2048
+            && (url.matches('^https://([a-z0-9-]+\\.)*googleusercontent\\.com/.+')
+                || isStorageUrl(url)));
+    }
+
+    function isAuthorName(name) {
+      return name is string && name.size() <= 100;
+    }
+
+    // Name and photo shown on content must be the author's own public profile, so
+    // nobody can post as "Equipo Nexus" or borrow someone else's avatar
+    function ownProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isOwnName(name) {
+      return isAuthorName(name) && name == ownProfile().displayName;
+    }
+
+    function isOwnIdentity(name, photoUrl) {
+      return isOwnName(name)
+        && isAvatarUrl(photoUrl)
+        && photoUrl == ownProfile().get('photoUrl', null);
+    }
+
+    // ── Circles: shared helpers ─────────────────────────────────────────
+    // Rules read the circle with get(), which works whether or not the caller can read it
+
+    function circlePath(circleId) {
+      return /databases/$(database)/documents/circles/$(circleId);
+    }
+
+    function isCircleMember(circleId) {
+      return circleId is string
+        && exists(circlePath(circleId))
+        && request.auth.uid in get(circlePath(circleId)).data.memberIds;
+    }
+
+    // Public posts have no circle; a circle post is only for its members (and its author,
+    // who keeps seeing it after leaving)
+    function canSeePost(data) {
+      return data.get('circleId', null) == null
+        || data.authorId == request.auth.uid
+        || isCircleMember(data.circleId);
+    }
+
+    // ── Posts ───────────────────────────────────────────────────────────
     match /posts/{postId} {
-      allow read: if isAuth();
 
-      // Crear post: el autor debe ser el usuario autenticado
-      allow create: if isAuth()
-        && request.auth.uid == request.resource.data.authorId;
-
-      // Actualizar post: el autor puede editar su contenido;
-      // cualquier usuario autenticado puede actualizar reactions y ecoCount
-      allow update: if isAuth()
-        && (request.auth.uid == resource.data.authorId
-            || request.resource.data.diff(resource.data)
-               .affectedKeys()
-               .hasOnly(['reactions', 'ecoCount']));
-
-      // ── Ecos (comentarios) ──────────────────────────────────────────────
-      match /ecos/{ecoId} {
-        allow read: if isAuth();
-        allow create: if isAuth()
-          && request.auth.uid == request.resource.data.authorId;
+      function isPostMedia(url) {
+        // posts/{authorUid}/{postId}/...: the bucket only lets each user write in their own folder
+        return isStorageUrlIn(url, 'posts/' + request.auth.uid + '/' + postId);
       }
 
-      // ── Reacciones por usuario ──────────────────────────────────────────
+      function isOptionalPostMedia(url) {
+        return url == null || isPostMedia(url);
+      }
+
+      // Up to 4 images, each one uploaded into this post's own folder
+      function isValidImageUrls(urls) {
+        return urls is list
+          && urls.size() <= 4
+          && (urls.size() < 1 || isPostMedia(urls[0]))
+          && (urls.size() < 2 || isPostMedia(urls[1]))
+          && (urls.size() < 3 || isPostMedia(urls[2]))
+          && (urls.size() < 4 || isPostMedia(urls[3]));
+      }
+
+      function isValidContent(content) {
+        return content is string && content.size() > 0 && content.size() <= 500;
+      }
+
+      function isValidNewPost() {
+        let data = request.resource.data;
+        return data.keys().hasOnly([
+            'authorId', 'authorName', 'authorPhotoUrl', 'content', 'circleId', 'circleName',
+            'imageUrls', 'audioUrl', 'fileUrl', 'fileName', 'mood', 'locationName', 'gifUrl',
+            'ecoCount', 'reactions', 'createdAt', 'updatedAt'])
+          && data.authorId == request.auth.uid
+          && isOwnIdentity(data.authorName, data.get('authorPhotoUrl', null))
+          && isValidContent(data.content)
+          // A circle post needs a member author, and its label must be the circle's real name
+          && (data.get('circleId', null) == null
+              ? data.get('circleName', null) == null
+              : (isCircleMember(data.circleId)
+                 && data.get('circleName', null) == get(circlePath(data.circleId)).data.name))
+          && isValidImageUrls(data.get('imageUrls', []))
+          && isOptionalPostMedia(data.get('audioUrl', null))
+          && isOptionalPostMedia(data.get('fileUrl', null))
+          && isOptionalString(data.get('fileName', null), 255)
+          && isOptionalString(data.get('mood', null), 50)
+          && isOptionalString(data.get('locationName', null), 100)
+          && (data.get('gifUrl', null) == null || isGiphyUrl(data.gifUrl))
+          && data.ecoCount == 0
+          && data.reactions == {}
+          && isRecentMillis(data.createdAt)
+          && isRecentMillis(data.updatedAt);
+      }
+
+      // The author may only edit the content, never counters, media or authorship
+      function isValidAuthorEdit() {
+        let data = request.resource.data;
+        return resource.data.authorId == request.auth.uid
+          && changedKeys().hasOnly(['content', 'mood', 'locationName', 'updatedAt'])
+          && isValidContent(data.content)
+          && isOptionalString(data.get('mood', null), 50)
+          && isOptionalString(data.get('locationName', null), 100)
+          && (!('updatedAt' in changedKeys()) || isRecentMillis(data.updatedAt));
+      }
+
+      function ecoPath(ecoId) {
+        return /databases/$(database)/documents/posts/$(postId)/ecos/$(ecoId);
+      }
+
+      // ecoCount only goes up by one, together with the creation of a new eco by the
+      // same user in the same write; lastEcoId names that eco so the rule can check it
+      function isEcoCountIncrement() {
+        let ecoId = request.resource.data.lastEcoId;
+        return changedKeys().hasOnly(['ecoCount', 'lastEcoId'])
+          && request.resource.data.ecoCount == resource.data.get('ecoCount', 0) + 1
+          && ecoId is string
+          && !exists(ecoPath(ecoId))
+          && existsAfter(ecoPath(ecoId))
+          && getAfter(ecoPath(ecoId)).data.authorId == request.auth.uid;
+      }
+
+      function userReactionPath() {
+        return /databases/$(database)/documents/posts/$(postId)/userReactions/$(request.auth.uid);
+      }
+
+      // A reaction change must match the user's userReactions doc written in the same
+      // transaction: -1 on the previous emoji and +1 on the new one, nothing else
+      function isValidReactionChange() {
+        let before = resource.data.get('reactions', {});
+        let after = request.resource.data.get('reactions', {});
+        let oldEmoji = exists(userReactionPath()) ? get(userReactionPath()).data.emoji : null;
+        let newEmoji = existsAfter(userReactionPath()) ? getAfter(userReactionPath()).data.emoji : null;
+        let allowedKeys = oldEmoji == null ? [newEmoji]
+          : (newEmoji == null ? [oldEmoji] : [oldEmoji, newEmoji]);
+        return changedKeys().hasOnly(['reactions'])
+          && oldEmoji != newEmoji
+          && after.diff(before).affectedKeys().hasOnly(allowedKeys)
+          && (oldEmoji == null || after.get(oldEmoji, 0) == before.get(oldEmoji, 0) - 1)
+          && (newEmoji == null || after.get(newEmoji, 0) == before.get(newEmoji, 0) + 1);
+      }
+
+      allow get: if isAuth() && canSeePost(resource.data);
+      // Queries must say which posts they want: the public feed filters circleId == null,
+      // a circle feed circleId == <id>, the profile authorId == <own uid>. No get() with a
+      // default here: the query checker would accept an unfiltered query that way and
+      // hand out circle posts
+      allow list: if isAuth()
+        && (resource.data.circleId == null
+            || resource.data.authorId == request.auth.uid
+            || request.auth.uid in get(circlePath(resource.data.circleId)).data.memberIds);
+      // The id goes into a regex (isPostMedia), so it must be a Firestore auto-id
+      allow create: if isAuth()
+        && postId.matches('[A-Za-z0-9]{20}')
+        && isValidNewPost();
+      allow update: if isAuth()
+        && canSeePost(resource.data)
+        && (isValidAuthorEdit() || isEcoCountIncrement() || isValidReactionChange());
+      allow delete: if isAuth() && resource.data.authorId == request.auth.uid;
+
+      // ── Ecos (comments) ───────────────────────────────────────────────
+      match /ecos/{ecoId} {
+
+        function postPath() {
+          return /databases/$(database)/documents/posts/$(postId);
+        }
+
+        function isValidEcoMedia(data) {
+          let url = data.get('mediaUrl', null);
+          return (data.type in ['TEXT', 'EMOJI'] && url == null)
+            || (data.type == 'GIF' && isGiphyUrl(url))
+            // Uploaded by the eco author into ecos/{postId}/{uid}/ (see supabase/storage-setup.sql)
+            || (data.type in ['IMAGE', 'AUDIO']
+                && isStorageUrlIn(url, 'ecos/' + postId + '/' + request.auth.uid));
+        }
+
+        // Threads are one level deep: a reply points at a top-level eco (parentId) and may
+        // name the person it answers (replyToName, shown as @name). A reply to a reply
+        // keeps the same parentId, so it never nests further
+        function siblingEcoPath(id) {
+          return /databases/$(database)/documents/posts/$(postId)/ecos/$(id);
+        }
+
+        function isValidThreadLink(data) {
+          let parentId = data.get('parentId', null);
+          return (parentId == null && data.get('replyToName', null) == null)
+            || (parentId is string
+                && parentId != ecoId
+                && exists(siblingEcoPath(parentId))
+                && get(siblingEcoPath(parentId)).data.get('parentId', null) == null
+                && isOptionalString(data.get('replyToName', null), 80));
+        }
+
+        // A heart on an eco: the user adds or removes only their own uid, nothing else
+        function isOwnLikeToggle() {
+          let before = resource.data.get('likedBy', []);
+          let after = request.resource.data.get('likedBy', []);
+          let me = [request.auth.uid].toSet();
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+            && after is list
+            && after.size() <= 1000
+            && ((!(request.auth.uid in before)
+                  && after.size() == before.size() + 1
+                  && after.toSet() == before.toSet().union(me))
+                || (request.auth.uid in before
+                  && after.size() == before.size() - 1
+                  && after.toSet() == before.toSet().difference(me)));
+        }
+
+        allow read: if isAuth() && canSeePost(get(postPath()).data);
+        // Only together with the ecoCount increment that names this eco
+        allow create: if isAuth()
+          && canSeePost(get(postPath()).data)
+          && request.resource.data.keys().hasOnly(
+               ['authorId', 'authorName', 'type', 'message', 'emoji', 'mediaUrl', 'createdAt',
+                'parentId', 'replyToName'])
+          && request.resource.data.authorId == request.auth.uid
+          && isOwnName(request.resource.data.authorName)
+          && request.resource.data.type in ['TEXT', 'EMOJI', 'GIF', 'IMAGE', 'AUDIO']
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 1000
+          && isOptionalString(request.resource.data.get('emoji', null), 16)
+          && isValidEcoMedia(request.resource.data)
+          && isValidThreadLink(request.resource.data)
+          && isRecentMillis(request.resource.data.createdAt)
+          && getAfter(postPath()).data.get('lastEcoId', null) == ecoId;
+        // The content never changes; only hearts do
+        allow update: if isAuth()
+          && canSeePost(get(postPath()).data)
+          && isOwnLikeToggle();
+        // Ecos are permanent: deleting one without lowering ecoCount would let a user
+        // inflate the counter by repeating create + delete
+        allow delete: if false;
+      }
+
+      // ── Per-user reactions ────────────────────────────────────────────
+      // Only valid in the same write that changes the post's counters; the post rule
+      // then checks that the counters move exactly by this change
       match /userReactions/{userId} {
-        allow read: if isAuth();
-        allow write: if isAuth() && request.auth.uid == userId;
+
+        function postPath() {
+          return /databases/$(database)/documents/posts/$(postId);
+        }
+
+        function postReactionsChanged() {
+          return getAfter(postPath()).data.get('reactions', {})
+            != get(postPath()).data.get('reactions', {});
+        }
+
+        allow read: if isAuth() && canSeePost(get(postPath()).data);
+        allow create, update: if isOwner(userId)
+          && canSeePost(get(postPath()).data)
+          && request.resource.data.keys().hasOnly(['emoji'])
+          && request.resource.data.emoji is string
+          && request.resource.data.emoji.size() > 0
+          && request.resource.data.emoji.size() <= 16
+          && postReactionsChanged();
+        allow delete: if isOwner(userId) && postReactionsChanged();
       }
     }
 
     // ── Stories / Reels ─────────────────────────────────────────────────
     match /stories/{storyId} {
-      allow read: if isAuth();
-      allow create: if isAuth()
-        && request.auth.uid == request.resource.data.authorId;
-      allow update, delete: if isAuth()
-        && request.auth.uid == resource.data.authorId;
 
+      function isValidNewStory() {
+        let data = request.resource.data;
+        let uid = request.auth.uid;
+        return data.keys().hasOnly([
+            'id', 'authorId', 'authorName', 'authorAvatarUrl', 'type', 'mediaUrl', 'text',
+            'textColor', 'backgroundGradient', 'musicTitle', 'musicArtist', 'musicPreviewUrl',
+            'musicStartMs', 'musicDurationMs', 'sharedPostId', 'createdAt', 'expiresAt',
+            'expireAt', 'views'])
+          // The document id is the real id; this field only exists in the client model
+          && data.get('id', '') == ''
+          && data.authorId == uid
+          && isOwnIdentity(data.authorName, data.get('authorAvatarUrl', null))
+          && data.type in ['IMAGE', 'VIDEO', 'TEXT', 'REEL', 'SHARED_POST']
+          // Media must live in the author's own Storage folder
+          && (data.get('mediaUrl', null) == null
+              || isStorageUrlIn(data.mediaUrl, 'stories/' + uid))
+          && isOptionalString(data.get('text', null), 500)
+          && data.get('textColor', 0) is int
+          && isOptionalString(data.get('backgroundGradient', null), 32)
+          && data.get('musicStartMs', 0) is int
+          && data.get('musicDurationMs', 0) is int
+          && isOptionalString(data.get('musicTitle', null), 200)
+          && isOptionalString(data.get('musicArtist', null), 200)
+          // Music previews only from the catalogs the app searches (iTunes, Spotify)
+          && (data.get('musicPreviewUrl', null) == null
+              || (data.musicPreviewUrl is string
+                  && data.musicPreviewUrl.size() <= 2048
+                  && data.musicPreviewUrl.matches(
+                       '^https://([a-z0-9-]+\\.)*(apple\\.com|mzstatic\\.com|scdn\\.co)/.+')))
+          && isOptionalString(data.get('sharedPostId', null), 128)
+          && data.get('views', 0) == 0
+          && isRecentMillis(data.createdAt)
+          // Exactly 24 h, so a story can never outlive its window
+          && data.expiresAt == data.createdAt + 86400000
+          // Same instant as a Timestamp: the field the Firestore TTL policy deletes by
+          && data.expireAt is timestamp
+          && data.expireAt.toMillis() == data.expiresAt;
+      }
+
+      // An expired story cannot be opened by id. Listing is capped at the page the app
+      // asks for; expired documents are removed for good by the TTL policy on expireAt
+      allow get: if isAuth() && resource.data.expiresAt > nowMillis();
+      allow list: if isAuth() && request.query.limit <= 50;
+      allow create: if isAuth() && isValidNewStory();
+      // Stories are immutable once published; the author can only delete them
+      allow update: if false;
+      allow delete: if isAuth() && resource.data.authorId == request.auth.uid;
+
+      // Only the story author and the viewer themselves can see a view; each user only marks themselves
       match /seenBy/{userId} {
-        allow read, write: if isAuth();
+        allow read: if isOwner(userId)
+          || (isAuth()
+              && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId
+                 == request.auth.uid);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['seenAt'])
+          && isRecentMillis(request.resource.data.seenAt);
+        allow delete: if isOwner(userId);
       }
     }
 
-    // ── Usuarios ────────────────────────────────────────────────────────
+    // ── Users ───────────────────────────────────────────────────────────
     match /users/{userId} {
+
+      function isValidProfile(data) {
+        return data.uid == userId
+          && data.displayName is string
+          && data.displayName.size() <= 100
+          && isAvatarUrl(data.get('photoUrl', null))
+          && data.updatedAt == request.time;
+      }
+
       allow read: if isAuth();
-      allow write: if isAuth() && request.auth.uid == userId;
+      // Public profile: a fixed set of fields, so no role or flag can be self-assigned
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'photoUrl', 'updatedAt'])
+        && isValidProfile(request.resource.data);
+      allow update: if isOwner(userId)
+        && changedKeys().hasOnly(['uid', 'displayName', 'photoUrl', 'updatedAt'])
+        && isValidProfile(request.resource.data);
+      allow delete: if isOwner(userId);
+
+      // Private copy of this user's reactions (postId → emoji), so the feed can load them
+      // with one query per page. It only drives this user's own highlight: the counters
+      // are protected by posts/{postId}/userReactions
+      match /reactions/{postId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['emoji'])
+          && request.resource.data.emoji is string
+          && request.resource.data.emoji.size() > 0
+          && request.resource.data.emoji.size() <= 16;
+      }
+
+      // Private: which stories this user already watched
+      match /seenStories/{storyId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['seenAt'])
+          && isRecentMillis(request.resource.data.seenAt);
+      }
+
+      // Private: posts this user saved for later (document id = post id)
+      match /saved/{postId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['savedAt'])
+          && isRecentMillis(request.resource.data.savedAt);
+      }
+    }
+
+    // ── Circles ─────────────────────────────────────────────────────────
+    // Small private groups. Members are listed in memberIds (max 30) so the app can query
+    // "my circles" with array-contains. Joining needs the current invite code.
+    match /circles/{circleId} {
+
+      function isValidCircle(data) {
+        return data.name is string
+          && data.name.trim().size() > 0
+          && data.name.size() <= 40
+          && data.emoji is string
+          && data.emoji.size() > 0
+          && data.emoji.size() <= 16
+          && data.colorIndex is int
+          && data.colorIndex >= 0
+          && data.colorIndex <= 7
+          && data.inviteCode is string
+          && data.inviteCode.matches('[A-HJ-NP-Z2-9]{8}')
+          && data.memberIds is list
+          && data.memberIds.size() <= 30;
+      }
+
+      function memberPath(uid) {
+        return /databases/$(database)/documents/circles/$(circleId)/members/$(uid);
+      }
+
+      function invitePath(code) {
+        return /databases/$(database)/documents/circleInvites/$(code);
+      }
+
+      // A new or regenerated code must come with its lookup document in the same write
+      function hasInvite(data) {
+        return existsAfter(invitePath(data.inviteCode))
+          && getAfter(invitePath(data.inviteCode)).data.circleId == circleId;
+      }
+
+      function isOwnerOfCircle() {
+        return resource.data.ownerId == request.auth.uid;
+      }
+
+      // The owner renames, recolors, regenerates the code or removes members (never themselves)
+      function isOwnerEdit() {
+        let after = request.resource.data;
+        return isOwnerOfCircle()
+          && changedKeys().hasOnly(['name', 'emoji', 'colorIndex', 'inviteCode', 'memberIds'])
+          && isValidCircle(after)
+          && request.auth.uid in after.memberIds
+          && resource.data.memberIds.hasAll(after.memberIds)
+          && (!('inviteCode' in changedKeys()) || hasInvite(after));
+      }
+
+      // Joining adds only the caller, together with members/{uid} holding the right code
+      function isJoin() {
+        let uid = request.auth.uid;
+        let before = resource.data.memberIds;
+        let after = request.resource.data.memberIds;
+        return !(uid in before)
+          && changedKeys().hasOnly(['memberIds'])
+          && after.size() == before.size() + 1
+          && after.size() <= 30
+          && after.toSet() == before.toSet().union([uid].toSet())
+          && existsAfter(memberPath(uid))
+          && getAfter(memberPath(uid)).data.code == resource.data.inviteCode;
+      }
+
+      // Leaving removes only the caller; the owner deletes the circle instead
+      function isLeave() {
+        let uid = request.auth.uid;
+        let before = resource.data.memberIds;
+        let after = request.resource.data.memberIds;
+        return uid in before
+          && !isOwnerOfCircle()
+          && changedKeys().hasOnly(['memberIds'])
+          && after.size() == before.size() - 1
+          && after.toSet() == before.toSet().difference([uid].toSet());
+      }
+
+      // "My circles" is a memberIds array-contains query, which this rule allows
+      allow read: if isAuth() && request.auth.uid in resource.data.memberIds;
+      allow create: if isAuth()
+        && request.resource.data.keys().hasOnly(
+             ['name', 'emoji', 'colorIndex', 'ownerId', 'memberIds', 'inviteCode', 'createdAt'])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid]
+        && isValidCircle(request.resource.data)
+        && isRecentMillis(request.resource.data.createdAt)
+        && hasInvite(request.resource.data);
+      allow update: if isAuth() && (isOwnerEdit() || isJoin() || isLeave());
+      allow delete: if isAuth() && isOwnerOfCircle();
+
+      // Proof of the invite code used to join (document id = member uid)
+      match /members/{userId} {
+        allow read: if isOwner(userId) || isCircleMember(circleId);
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['code', 'joinedAt'])
+          && request.resource.data.code == get(circlePath(circleId)).data.inviteCode
+          && isRecentMillis(request.resource.data.joinedAt);
+        // The member when leaving, or the owner when removing them or deleting the circle
+        allow delete: if isOwner(userId)
+          || (isAuth() && get(circlePath(circleId)).data.ownerId == request.auth.uid);
+      }
+    }
+
+    // Invite lookup by code (document id = code): lets someone outside the circle see its
+    // name before joining. Only fetched by its exact code, never listed.
+    match /circleInvites/{code} {
+
+      function matchesCircle(data) {
+        let circle = getAfter(circlePath(data.circleId)).data;
+        return data.keys().hasOnly(['circleId', 'name', 'emoji', 'colorIndex'])
+          && circle.ownerId == request.auth.uid
+          && circle.inviteCode == code
+          && data.name == circle.name
+          && data.emoji == circle.emoji
+          && data.colorIndex == circle.colorIndex;
+      }
+
+      allow get: if isAuth();
+      allow list: if false;
+      allow create: if isAuth() && matchesCircle(request.resource.data);
+      allow update: if isAuth()
+        && request.resource.data.circleId == resource.data.circleId
+        && matchesCircle(request.resource.data);
+      // The owner retires an old code; an invite of a deleted circle can be cleaned by anyone
+      allow delete: if isAuth()
+        && (!exists(circlePath(resource.data.circleId))
+            || get(circlePath(resource.data.circleId)).data.ownerId == request.auth.uid);
+    }
+
+    // ── Direct messages ─────────────────────────────────────────────────
+    // One conversation per pair of users, id = the two uids sorted and joined with "_".
+    // It can only be started between people who share a circle.
+    match /conversations/{conversationId} {
+
+      function isValidPair(data) {
+        return data.participants is list
+          && data.participants.size() == 2
+          && data.participants[0] < data.participants[1]
+          && conversationId == data.participants[0] + '_' + data.participants[1];
+      }
+
+      function isValidPreview(data) {
+        return data.lastMessage is map
+          && data.lastMessage.keys().hasOnly(['text', 'senderId', 'createdAt'])
+          && data.lastMessage.text is string
+          && data.lastMessage.text.size() <= 200
+          && data.lastMessage.senderId == request.auth.uid
+          && data.lastMessage.createdAt is int;
+      }
+
+      function isValidCounters(data) {
+        return data.updatedAt is int
+          && data.unread is map
+          && data.unread.keys().hasOnly(data.participants)
+          && data.lastRead is map
+          && data.lastRead.keys().hasOnly(data.participants);
+      }
+
+      // A conversation that does not exist yet can be looked up by either participant
+      allow get: if isAuth()
+        && (resource == null
+            ? request.auth.uid in conversationId.split('_')
+            : request.auth.uid in resource.data.participants);
+      allow list: if isAuth() && request.auth.uid in resource.data.participants;
+      allow create: if isAuth()
+        && request.resource.data.keys().hasOnly(
+             ['participants', 'sharedCircleId', 'lastMessage', 'updatedAt', 'unread', 'lastRead'])
+        && isValidPair(request.resource.data)
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.sharedCircleId is string
+        && exists(circlePath(request.resource.data.sharedCircleId))
+        && get(circlePath(request.resource.data.sharedCircleId)).data.memberIds
+             .hasAll(request.resource.data.participants)
+        && isValidPreview(request.resource.data)
+        && isValidCounters(request.resource.data);
+      // New message preview and unread counters, or marking as read
+      allow update: if isAuth()
+        && request.auth.uid in resource.data.participants
+        && changedKeys().hasOnly(['lastMessage', 'updatedAt', 'unread', 'lastRead'])
+        && (!('lastMessage' in changedKeys()) || isValidPreview(request.resource.data))
+        && isValidCounters(request.resource.data);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+
+        function conversationPath() {
+          return /databases/$(database)/documents/conversations/$(conversationId);
+        }
+
+        allow read: if isAuth()
+          && request.auth.uid in get(conversationPath()).data.participants;
+        // Text, a Giphy GIF, or both
+        function isValidBody(data) {
+          let gif = data.get('gifUrl', null);
+          return data.text is string
+            && data.text.size() <= 2000
+            && (gif == null || isGiphyUrl(gif))
+            && (data.text.trim().size() > 0 || gif != null);
+        }
+
+        // Written in the same batch as the conversation preview, which may create it
+        allow create: if isAuth()
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'gifUrl', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && isValidBody(request.resource.data)
+          && isRecentMillis(request.resource.data.createdAt)
+          && request.auth.uid in getAfter(conversationPath()).data.participants;
+        allow update, delete: if false;
+      }
+    }
+
+    // ── Reports ─────────────────────────────────────────────────────────
+    // Write-only for users; moderation reads them from the console. The id is
+    // {postId}_{reporterUid}, so each user can report a post once and never edit it
+    match /reports/{reportId} {
+      function isValidReport() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['postId', 'reporterId', 'reason', 'details', 'createdAt'])
+          && data.reporterId == request.auth.uid
+          && data.postId is string
+          && reportId == data.postId + '_' + request.auth.uid
+          && exists(/databases/$(database)/documents/posts/$(data.postId))
+          && data.reason in ['SPAM', 'HARASSMENT', 'INAPPROPRIATE', 'MISINFORMATION', 'OTHER']
+          && isOptionalString(data.get('details', null), 500)
+          && isRecentMillis(data.createdAt);
+      }
+
+      // Lets the app tell "already reported" apart; only for the reporter's own report id
+      allow get: if isAuth() && reportId.matches('.+_' + request.auth.uid);
+      allow create: if isAuth() && isValidReport();
+      allow list, update, delete: if false;
     }
   }
 }

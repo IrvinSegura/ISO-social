@@ -2,6 +2,7 @@ package com.nexus.feature.post.domain.usecase
 
 import com.nexus.core.common.result.NexusException
 import com.nexus.core.common.result.NexusResult
+import com.nexus.feature.post.domain.model.EcoReplyTarget
 import com.nexus.feature.post.domain.model.EcoType
 import com.nexus.feature.post.domain.repository.PostRepository
 import javax.inject.Inject
@@ -15,6 +16,7 @@ class SendEcoUseCase @Inject constructor(
         message: String = "",
         emoji: String? = null,
         mediaUrl: String? = null,
+        replyTo: EcoReplyTarget? = null,
     ): NexusResult<Unit> {
         val valid = when (type) {
             EcoType.TEXT -> message.isNotBlank()
@@ -26,6 +28,6 @@ class SendEcoUseCase @Inject constructor(
                 NexusException.UnknownException(IllegalArgumentException("El eco no puede estar vacío.")),
             )
         }
-        return repository.sendEco(postId, type, message.trim(), emoji, mediaUrl)
+        return repository.sendEco(postId, type, message.trim(), emoji, mediaUrl, replyTo)
     }
 }

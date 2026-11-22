@@ -1,7 +1,6 @@
 package com.nexus.feature.feed.presentation.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nexus.core.ui.theme.isNexusDarkTheme
 import com.nexus.core.ui.components.shimmer
 
 /**
@@ -65,19 +65,20 @@ private fun StoriesRowSkeleton() {
 
 @Composable
 private fun SkeletonPostCard(contentLines: Int) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isNexusDarkTheme()
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(26.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 1.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header: avatar + nombre + meta
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).shimmer(CircleShape))
+                Box(Modifier.size(44.dp).shimmer(CircleShape))
                 Spacer(Modifier.width(12.dp))
                 Column {
                     ShimmerLine(width = 130.dp, height = 13.dp)

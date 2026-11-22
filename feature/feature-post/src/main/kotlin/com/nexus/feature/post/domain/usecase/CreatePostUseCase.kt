@@ -18,6 +18,7 @@ class CreatePostUseCase @Inject constructor(
         fileName: String?,
         mood: String?,
         locationName: String?,
+        gifUrl: String? = null,
     ): NexusResult<String> = repository.createPost(
         content = content.trim(),
         circleId = circleId,
@@ -28,5 +29,6 @@ class CreatePostUseCase @Inject constructor(
         fileName = fileName,
         mood = mood,
         locationName = locationName,
+        gifUrl = gifUrl,
     )
 }

@@ -21,6 +21,7 @@ interface PostRemoteDataSource {
         fileName: String?,
         mood: String?,
         locationName: String?,
+        gifUrl: String?,
     ): String
     suspend fun sendEco(
         postId: String,
@@ -30,5 +31,13 @@ interface PostRemoteDataSource {
         message: String,
         emoji: String?,
         mediaUrl: String?,
+        parentId: String?,
+        replyToName: String?,
     )
+    /** Gives or takes back [userId]'s heart on an eco. */
+    suspend fun setEcoLiked(postId: String, ecoId: String, userId: String, liked: Boolean)
+    /** Changes what the author may edit: the text and the mood. */
+    suspend fun updatePost(postId: String, content: String, mood: String?)
+    /** Deletes the post, then (best effort) the media in [authorId]'s folder for it. */
+    suspend fun deletePost(postId: String, authorId: String)
 }

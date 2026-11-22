@@ -14,19 +14,30 @@ class AudioRecorderManager @Inject constructor(
     private var outputPath: String? = null
 
     fun startRecording(): String {
+        // A second start (e.g. two permission callbacks) must not leak the active recorder
+        check(recorder == null) { "Already recording" }
         val file = File(context.cacheDir, "post_audio_${System.currentTimeMillis()}.m4a")
-        outputPath = file.absolutePath
-        recorder = createRecorder().apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setAudioEncodingBitRate(128_000)
-            setAudioSamplingRate(44_100)
-            setOutputFile(outputPath)
-            prepare()
-            start()
+        val newRecorder = createRecorder()
+        try {
+            newRecorder.apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioEncodingBitRate(128_000)
+                setAudioSamplingRate(44_100)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            // prepare()/start() can fail (mic busy, no permission): free the mic before rethrowing
+            newRecorder.release()
+            file.delete()
+            throw e
         }
-        return outputPath!!
+        recorder = newRecorder
+        outputPath = file.absolutePath
+        return file.absolutePath
     }
 
     fun stopRecording(): String? {

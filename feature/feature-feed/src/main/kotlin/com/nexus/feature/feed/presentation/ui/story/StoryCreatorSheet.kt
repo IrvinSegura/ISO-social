@@ -3,7 +3,6 @@ package com.nexus.feature.feed.presentation.ui.story
 import android.Manifest
 import android.content.Context
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -72,6 +71,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,46 +119,53 @@ fun StoryCreatorSheet(
     var selectedMusicEntry by remember { mutableStateOf<MusicEntry?>(null) }
     var showMusicPicker by remember { mutableStateOf(false) }
     var trimEntry by remember { mutableStateOf<MusicEntry?>(null) }
-    var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
-    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+    // Saveable: the Activity can be recreated while the camera or picker is open
+    var selectedMediaUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    // Which launcher produced selectedMediaUri; the story type comes from this, not from the mode
+    var selectedMediaIsVideo by rememberSaveable { mutableStateOf(false) }
+    var cameraImageUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     // ---- Launchers de media ----
 
     val galleryImageLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
-    ) { uri -> uri?.let { selectedMediaUri = it } }
+    ) { uri ->
+        uri?.let {
+            selectedMediaUri = it
+            selectedMediaIsVideo = false
+        }
+    }
 
     val galleryVideoLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
-    ) { uri -> uri?.let { selectedMediaUri = it } }
+    ) { uri ->
+        uri?.let {
+            selectedMediaUri = it
+            selectedMediaIsVideo = true
+        }
+    }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
-    ) { success -> if (success) selectedMediaUri = cameraImageUri }
+    ) { success ->
+        if (success) {
+            selectedMediaUri = cameraImageUri
+            selectedMediaIsVideo = false
+        }
+    }
 
     val cameraVideoLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CaptureVideo(),
-    ) { success -> if (success) selectedMediaUri = cameraImageUri }
+    ) { success ->
+        if (success) {
+            selectedMediaUri = cameraImageUri
+            selectedMediaIsVideo = true
+        }
+    }
 
     // ---- Permisos ----
-
-    val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        Manifest.permission.READ_MEDIA_IMAGES
-    else
-        Manifest.permission.READ_EXTERNAL_STORAGE
-
-    val mediaPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) galleryImageLauncher.launch("image/*") }
-
-    val videoPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-        Manifest.permission.READ_MEDIA_VIDEO
-    else
-        Manifest.permission.READ_EXTERNAL_STORAGE
-
-    val videoPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) galleryVideoLauncher.launch("video/*") }
+    // The gallery uses GetContent (system picker), which needs no storage permission.
+    // Asking for READ_MEDIA_* blocked the picker when the user granted only partial access.
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -399,14 +406,14 @@ fun StoryCreatorSheet(
                 ActionChip(
                     icon = Icons.Outlined.PhotoLibrary,
                     label = "Imagen",
-                    onClick = { mediaPermissionLauncher.launch(mediaPermission) },
+                    onClick = { galleryImageLauncher.launch("image/*") },
                     modifier = Modifier.weight(1f),
                 )
                 ActionChip(
                     icon = Icons.Outlined.Videocam,
                     label = "Video",
                     isActive = selectedMode == CreatorMode.REEL,
-                    onClick = { videoPermissionLauncher.launch(videoPermission) },
+                    onClick = { galleryVideoLauncher.launch("video/*") },
                     modifier = Modifier.weight(1f),
                 )
                 ActionChip(
@@ -444,11 +451,8 @@ fun StoryCreatorSheet(
             // Botón publicar
             Button(
                 onClick = {
-                    val type = when {
-                        selectedMode == CreatorMode.REEL -> StoryType.REEL
-                        selectedMediaUri != null -> StoryType.IMAGE
-                        else -> StoryType.TEXT
-                    }
+                    val type = storyTypeFor(selectedMode, selectedMediaUri != null, selectedMediaIsVideo)
+                        ?: return@Button
                     onCreateStory(
                         type,
                         selectedMediaUri?.toString(),
@@ -461,7 +465,9 @@ fun StoryCreatorSheet(
                         selectedMusicEntry?.durationMs ?: 30_000L,
                     )
                 },
-                enabled = !isCreating,
+                // A reel stays disabled until a video is picked
+                enabled = !isCreating &&
+                    storyTypeFor(selectedMode, selectedMediaUri != null, selectedMediaIsVideo) != null,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
             ) {
@@ -705,7 +711,12 @@ private fun MusicTrimSheet(
     var playPositionSec by remember { mutableStateOf(0f) }
     var isPlaying by remember { mutableStateOf(false) }
     var isPrepared by remember { mutableStateOf(false) }
+    // Set when the preview URL fails, so the spinner does not spin forever
+    var previewFailed by remember { mutableStateOf(false) }
     var playingFull by remember { mutableStateOf(false) }
+    // The pending auto-stop of the current play; a new play cancels it so an old timer
+    // cannot cut the new playback short
+    var stopJob by remember { mutableStateOf<Job?>(null) }
     var volume by remember { mutableStateOf(1f) }
     val scope = rememberCoroutineScope()
 
@@ -730,6 +741,12 @@ private fun MusicTrimSheet(
                         enabled = true
                     }
                     isPrepared = true
+                }
+                setOnErrorListener { _, _, _ ->
+                    isPrepared = false
+                    isPlaying = false
+                    previewFailed = true
+                    true
                 }
                 prepareAsync()
             }
@@ -766,41 +783,37 @@ private fun MusicTrimSheet(
     }
 
     fun stopPlayback() {
+        stopJob?.cancel()
+        stopJob = null
         mediaPlayer?.setVolume(0f, 0f)
-        mediaPlayer?.pause()
+        if (isPrepared) mediaPlayer?.pause()
         isPlaying = false
         playingFull = false
     }
 
-    fun playFull() {
+    fun play(fromMs: Int, full: Boolean, forMs: Long) {
         mediaPlayer ?: return
         if (!isPrepared) return
+        stopJob?.cancel()
         mediaPlayer.setVolume(0f, 0f)
-        mediaPlayer.seekTo(0)
+        mediaPlayer.seekTo(fromMs)
         mediaPlayer.start()
         isPlaying = true
-        playingFull = true
-        scope.launch {
+        playingFull = full
+        stopJob = scope.launch {
             fadeIn(mediaPlayer)
-            delay(previewMaxSec.toLong() * 1000)
-            if (isPlaying && playingFull) stopPlayback()
+            delay(forMs)
+            stopPlayback()
         }
     }
 
-    fun playSelection() {
-        mediaPlayer ?: return
-        if (!isPrepared) return
-        mediaPlayer.setVolume(0f, 0f)
-        mediaPlayer.seekTo((startSec * 1000).toInt())
-        mediaPlayer.start()
-        isPlaying = true
-        playingFull = false
-        scope.launch {
-            fadeIn(mediaPlayer)
-            delay((durationSec * 1000).roundToLong())
-            if (isPlaying && !playingFull) stopPlayback()
-        }
-    }
+    fun playFull() = play(fromMs = 0, full = true, forMs = previewMaxSec.toLong() * 1000)
+
+    fun playSelection() = play(
+        fromMs = (startSec * 1000).toInt(),
+        full = false,
+        forMs = (durationSec * 1000).roundToLong(),
+    )
 
     ModalBottomSheet(onDismissRequest = {
         stopPlayback()
@@ -871,7 +884,7 @@ private fun MusicTrimSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (!isPrepared) {
+                    if (!isPrepared && !previewFailed) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
                         Icon(
@@ -883,8 +896,11 @@ private fun MusicTrimSheet(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (isPlaying && playingFull) "${formatSeconds(playPositionSec)} / 30s"
-                            else "▶  Escuchar preview completo (30s)",
+                            text = when {
+                                previewFailed -> "No se pudo cargar el preview"
+                                isPlaying && playingFull -> "${formatSeconds(playPositionSec)} / 30s"
+                                else -> "▶  Escuchar preview completo (30s)"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -1316,9 +1332,20 @@ private fun ActionChip(
     }
 }
 
-private enum class CreatorMode(val label: String) {
+internal enum class CreatorMode(val label: String) {
     HISTORY("Historia"),
     REEL("Reel"),
+}
+
+/**
+ * Story type from the media actually picked. A reel must be a video, so REEL mode
+ * without a video returns null (nothing to publish yet).
+ */
+internal fun storyTypeFor(mode: CreatorMode, hasMedia: Boolean, isVideo: Boolean): StoryType? = when {
+    mode == CreatorMode.REEL -> if (hasMedia && isVideo) StoryType.REEL else null
+    hasMedia && isVideo -> StoryType.VIDEO
+    hasMedia -> StoryType.IMAGE
+    else -> StoryType.TEXT
 }
 
 data class MusicEntry(

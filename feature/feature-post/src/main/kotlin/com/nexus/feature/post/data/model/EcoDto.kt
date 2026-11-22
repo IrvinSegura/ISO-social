@@ -9,4 +9,7 @@ data class EcoDto(
     val emoji: String? = null,
     val mediaUrl: String? = null,
     val createdAt: Long = 0L,
+    val parentId: String? = null,
+    val replyToName: String? = null,
+    val likedBy: List<String> = emptyList(),
 )

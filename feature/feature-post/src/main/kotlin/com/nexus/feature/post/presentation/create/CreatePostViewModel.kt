@@ -1,12 +1,13 @@
 package com.nexus.feature.post.presentation.create
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.nexus.core.common.event.NewPostEventBus
 import com.nexus.core.common.event.NewPostPayload
-import com.nexus.core.common.result.NexusResult
-import com.nexus.feature.post.domain.usecase.CreatePostUseCase
+import com.nexus.core.firebase.circle.CircleDirectory
+import com.nexus.core.giphy.GiphyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -14,9 +15,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 
@@ -25,14 +28,20 @@ private const val MIN_CONTENT_LENGTH = 10
 
 @HiltViewModel
 class CreatePostViewModel @Inject constructor(
-    private val createPostUseCase: CreatePostUseCase,
+    savedStateHandle: SavedStateHandle,
+    private val circleDirectory: CircleDirectory,
+    private val postUploadManager: PostUploadManager,
     private val auth: FirebaseAuth,
     private val audioRecorderManager: AudioRecorderManager,
     private val locationHelper: LocationHelper,
     private val newPostEventBus: NewPostEventBus,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(CreatePostUiState())
+    private val _uiState = MutableStateFlow(
+        // Opened from a circle: that circle is the audience. Type-safe routes store the
+        // argument under its property name
+        CreatePostUiState(selectedCircleId = savedStateHandle.get<String>("circleId")),
+    )
     val uiState: StateFlow<CreatePostUiState> = _uiState.asStateFlow()
 
     private val _events = Channel<CreatePostEvent>(Channel.BUFFERED)
@@ -47,6 +56,20 @@ class CreatePostViewModel @Inject constructor(
                 currentUserName = user?.displayName.orEmpty(),
                 currentUserPhotoUrl = user?.photoUrl?.toString(),
             )
+        }
+        observeCircles()
+    }
+
+    private fun observeCircles() {
+        viewModelScope.launch {
+            circleDirectory.observeMyCircles()
+                .catch { e ->
+                    // The selection is kept on purpose: falling back to public could publish
+                    // something meant for a circle to everyone. The user picks again instead
+                    Timber.w(e, "Could not load circles for the audience picker")
+                    _uiState.update { it.copy(error = "No se pudieron cargar tus círculos") }
+                }
+                .collect { circles -> _uiState.update { it.copy(circles = circles) } }
         }
     }
 
@@ -68,6 +91,8 @@ class CreatePostViewModel @Inject constructor(
 
             is CreatePostIntent.ImageRemoved ->
                 _uiState.update { state ->
+                    // A double tap on the last image's "X" can send an index that no longer exists
+                    if (intent.index !in state.selectedImageUris.indices) return@update state
                     state.copy(
                         selectedImageUris = state.selectedImageUris.toMutableList().apply {
                             removeAt(intent.index)
@@ -87,6 +112,21 @@ class CreatePostViewModel @Inject constructor(
             CreatePostIntent.RemoveFile ->
                 _uiState.update { it.copy(selectedFileUri = null, selectedFileName = null) }
 
+            is CreatePostIntent.ShowGiphyPicker ->
+                _uiState.update { it.copy(giphyPicker = intent.kind) }
+
+            CreatePostIntent.HideGiphyPicker ->
+                _uiState.update { it.copy(giphyPicker = null) }
+
+            // Only Giphy URLs: the rules reject anything else
+            is CreatePostIntent.GifSelected ->
+                _uiState.update {
+                    it.copy(gifUrl = intent.url.takeIf(GiphyRepository::isGiphyUrl) ?: it.gifUrl, giphyPicker = null)
+                }
+
+            CreatePostIntent.RemoveGif ->
+                _uiState.update { it.copy(gifUrl = null) }
+
             CreatePostIntent.ShowMoodPicker ->
                 _uiState.update { it.copy(showMoodPicker = true) }
 
@@ -95,6 +135,15 @@ class CreatePostViewModel @Inject constructor(
 
             is CreatePostIntent.MoodSelected ->
                 _uiState.update { it.copy(selectedMood = intent.mood, showMoodPicker = false) }
+
+            CreatePostIntent.ShowAudiencePicker ->
+                _uiState.update { it.copy(showAudiencePicker = true) }
+
+            CreatePostIntent.HideAudiencePicker ->
+                _uiState.update { it.copy(showAudiencePicker = false) }
+
+            is CreatePostIntent.AudienceSelected ->
+                _uiState.update { it.copy(selectedCircleId = intent.circleId, showAudiencePicker = false) }
 
             CreatePostIntent.RequestLocation -> fetchLocation()
 
@@ -120,6 +169,8 @@ class CreatePostViewModel @Inject constructor(
     }
 
     fun onAudioPermissionGranted() {
+        // Two quick taps can grant the permission twice; only one recording may run
+        if (_uiState.value.recordingState == RecordingState.Recording) return
         try {
             audioRecorderManager.startRecording()
             _uiState.update { it.copy(recordingState = RecordingState.Recording, recordingDurationMs = 0L) }
@@ -164,6 +215,14 @@ class CreatePostViewModel @Inject constructor(
         }
     }
 
+    fun onAudioPermissionDenied() {
+        _uiState.update { it.copy(error = "Activa el permiso del micrófono para grabar una nota de voz") }
+    }
+
+    fun onLocationPermissionDenied() {
+        _uiState.update { it.copy(error = "Activa el permiso de ubicación para añadirla") }
+    }
+
     fun onLocationPermissionGranted() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingLocation = true) }
@@ -180,6 +239,9 @@ class CreatePostViewModel @Inject constructor(
 
     private fun publish() {
         val state = _uiState.value
+        // A second tap while the first publish is in flight would enqueue a duplicate post
+        if (state.publishingStep != PublishingStep.Idle || !state.isAudienceReady) return
+        val circle = state.selectedCircle
         val content = state.content.trim()
 
         if (content.length < MIN_CONTENT_LENGTH) {
@@ -214,35 +276,30 @@ class CreatePostViewModel @Inject constructor(
                     locationName = state.locationName,
                     createdAt = System.currentTimeMillis(),
                     isPending = true,
+                    circleId = circle?.id,
                 )
             )
 
-            // Navegar de vuelta inmediatamente, el upload sigue en background
-            _events.send(CreatePostEvent.PostCreated)
-            _uiState.update { it.copy(publishingStep = PublishingStep.Idle) }
-
-            val result = createPostUseCase(
-                content = content,
-                circleId = null,
-                circleName = null,
-                imageUris = state.selectedImageUris,
-                audioPath = state.recordedAudioPath,
-                fileUri = state.selectedFileUri,
-                fileName = state.selectedFileName,
-                mood = state.selectedMood,
-                locationName = state.locationName,
+            // Navegar de vuelta inmediatamente; el upload corre fuera del ViewModel
+            // para que no se cancele cuando esta pantalla se destruye
+            postUploadManager.enqueue(
+                tempId = tempId,
+                draft = PostDraft(
+                    content = content,
+                    imageUris = state.selectedImageUris,
+                    audioPath = state.recordedAudioPath,
+                    fileUri = state.selectedFileUri,
+                    fileName = state.selectedFileName,
+                    mood = state.selectedMood,
+                    locationName = state.locationName,
+                    circleId = circle?.id,
+                    circleName = circle?.name,
+                    gifUrl = state.gifUrl,
+                ),
             )
-
-            when (result) {
-                is NexusResult.Success -> {
-                    // Confirmar: quita el pendiente y el feed ya tiene el post real de Firestore
-                    newPostEventBus.emitConfirmed(tempId, result.data)
-                }
-                is NexusResult.Error -> {
-                    // Marcar como fallido para que el usuario pueda reintentar
-                    newPostEventBus.emitFailed(tempId)
-                }
-            }
+            // publishingStep is not reset: the screen closes, and resetting it here is what
+            // let a second tap through before navigation
+            _events.send(CreatePostEvent.PostCreated)
         }
     }
 

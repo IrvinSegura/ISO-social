@@ -7,8 +7,9 @@ import com.nexus.feature.post.presentation.create.ui.CreatePostScreen
 import com.nexus.feature.post.presentation.detail.ui.PostDetailScreen
 import kotlinx.serialization.Serializable
 
+/** [circleId] preselects that circle as the audience; null publishes to everyone. */
 @Serializable
-object CreatePostRoute
+data class CreatePostRoute(val circleId: String? = null)
 
 @Serializable
 data class PostDetailRoute(val postId: String)

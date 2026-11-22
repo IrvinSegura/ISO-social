@@ -16,7 +16,8 @@ android {
         applicationId = "com.nexus.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI passes -PversionCode=<run number> so every build it produces can be installed over the last
+        versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -58,6 +59,9 @@ dependencies {
     implementation(project(":feature:feature-auth"))
     implementation(project(":feature:feature-feed"))
     implementation(project(":feature:feature-post"))
+    implementation(project(":feature:feature-profile"))
+    implementation(project(":feature:feature-circles"))
+    implementation(project(":feature:feature-messages"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
