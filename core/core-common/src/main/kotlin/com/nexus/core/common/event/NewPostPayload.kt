@@ -11,4 +11,6 @@ data class NewPostPayload(
     val createdAt: Long,
     val isPending: Boolean,
     val confirmedId: String? = null,
+    // Set for a post published in a circle: only that circle shows it, never the public feed
+    val circleId: String? = null,
 )
