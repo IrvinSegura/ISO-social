@@ -33,6 +33,7 @@ dependencies {
     implementation(project(":core:core-common"))
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-datastore"))
+    implementation(project(":core:core-firebase"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -54,6 +55,7 @@ dependencies {
 
     // Google Credential Manager (Sign In with Google)
     implementation(libs.bundles.credentials)
+    implementation(libs.timber)
 
     // DI
     implementation(libs.hilt.android)

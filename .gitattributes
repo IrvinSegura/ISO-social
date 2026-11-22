@@ -1,0 +1,4 @@
+# gradlew runs on Linux CI and macOS: it must keep LF endings on any checkout
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary

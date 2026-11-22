@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -18,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.nexus.core.ui.theme.isNexusDarkTheme
 import com.nexus.core.ui.theme.NexusPurple
 
 /**
@@ -38,7 +38,7 @@ import com.nexus.core.ui.theme.NexusPurple
  */
 @Composable
 fun rememberShimmerBrush(durationMillis: Int = 1200): Brush {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isNexusDarkTheme()
     val base = MaterialTheme.colorScheme.surfaceVariant
 
     // Valle (más tenue) → cresta (con un toque de marca) → valle.

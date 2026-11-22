@@ -8,7 +8,7 @@ import com.nexus.feature.feed.domain.model.StoryType
 fun StoryDto.toDomain(seenByCurrentUser: Boolean = false) = Story(
     id = id,
     authorId = authorId,
-    authorName = authorName,
+    authorName = authorName.ifBlank { "Anónimo" },
     authorAvatarUrl = authorAvatarUrl,
     type = runCatching { StoryType.valueOf(type) }.getOrDefault(StoryType.TEXT),
     mediaUrl = mediaUrl,

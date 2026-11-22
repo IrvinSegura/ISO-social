@@ -27,9 +27,9 @@ dependencies {
     // Expose Firebase SDK classes to all dependent modules
     api(platform(libs.firebase.bom))
     api(libs.firebase.firestore)
-    api(libs.firebase.storage)
     api(libs.firebase.auth)
 
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }

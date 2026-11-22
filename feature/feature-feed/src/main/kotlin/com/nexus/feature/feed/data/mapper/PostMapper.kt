@@ -4,7 +4,7 @@ import com.nexus.feature.feed.data.local.entity.PostEntity
 import com.nexus.feature.feed.data.model.PostDto
 import com.nexus.feature.feed.domain.model.Post
 
-fun PostDto.toEntity(): PostEntity = PostEntity(
+fun PostDto.toEntity(myReaction: String? = null): PostEntity = PostEntity(
     id = id,
     authorId = authorId,
     authorName = authorName,
@@ -19,7 +19,9 @@ fun PostDto.toEntity(): PostEntity = PostEntity(
     fileName = fileName,
     mood = mood,
     locationName = locationName,
+    gifUrl = gifUrl,
     reactions = reactions.mapValues { (_, v) -> (v as? Number)?.toInt() ?: 0 },
+    myReaction = myReaction,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
@@ -41,5 +43,7 @@ fun PostEntity.toDomain(currentUserId: String): Post = Post(
     fileName = fileName,
     mood = mood,
     locationName = locationName,
+    gifUrl = gifUrl,
     reactions = reactions,
+    myReaction = myReaction,
 )

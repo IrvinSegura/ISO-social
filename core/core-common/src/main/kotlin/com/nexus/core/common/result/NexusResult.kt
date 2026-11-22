@@ -1,5 +1,7 @@
 package com.nexus.core.common.result
 
+import kotlin.coroutines.cancellation.CancellationException
+
 sealed interface NexusResult<out T> {
     data class Success<T>(val data: T) : NexusResult<T>
     data class Error(val exception: NexusException) : NexusResult<Nothing>
@@ -45,6 +47,9 @@ inline fun <T, R> NexusResult<T>.map(transform: (T) -> R): NexusResult<R> = when
 
 suspend fun <T> safeCall(block: suspend () -> T): NexusResult<T> = try {
     NexusResult.Success(block())
+} catch (e: CancellationException) {
+    // Never swallow cancellation, it breaks structured concurrency
+    throw e
 } catch (e: NexusException) {
     NexusResult.Error(e)
 } catch (e: Exception) {

@@ -1,9 +1,11 @@
 package com.nexus.feature.feed.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "posts")
+// The index serves the feed query (ORDER BY createdAt DESC, id DESC); see FeedMigrations
+@Entity(tableName = "posts", indices = [Index(value = ["createdAt", "id"])])
 data class PostEntity(
     @PrimaryKey val id: String,
     val authorId: String,
@@ -19,7 +21,10 @@ data class PostEntity(
     val fileName: String? = null,
     val mood: String? = null,
     val locationName: String? = null,
+    val gifUrl: String? = null,
     val reactions: Map<String, Int> = emptyMap(),
+    // Emoji the current user reacted with, so it survives refreshes and restarts
+    val myReaction: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )
