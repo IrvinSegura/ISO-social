@@ -1,14 +1,17 @@
 package com.nexus.feature.feed.presentation.ui.story
 
 import android.media.MediaPlayer
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.media.audiofx.LoudnessEnhancer
 import org.json.JSONObject
 import java.net.URL
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,9 +26,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -46,14 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +70,7 @@ import com.nexus.feature.feed.domain.model.StoryType
 import kotlinx.coroutines.delay
 
 private const val STORY_DURATION_MS = 5000L
+private const val PROGRESS_TICK_MS = 50L
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -82,12 +82,27 @@ fun StoryViewerScreen(
 ) {
     var currentIndex by remember { mutableIntStateOf(initialIndex) }
     var progress by remember { mutableFloatStateOf(0f) }
-    // isPaused: true por hold o por foco en el campo de respuesta
+    // isPaused: true por hold o mientras la app no está visible
     var isPausedByHold by remember { mutableStateOf(false) }
-    var isReplying by remember { mutableStateOf(false) }
-    val isPaused = isPausedByHold || isReplying
+    var isPausedByLifecycle by remember { mutableStateOf(false) }
+    val isPaused = isPausedByHold || isPausedByLifecycle
 
-    var replyText by remember { mutableStateOf("") }
+    // Back closes the viewer instead of leaving the feed or the app
+    BackHandler(onBack = onDismiss)
+
+    // In the background, video and music must stop and the story must not keep advancing
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> isPausedByLifecycle = true
+                Lifecycle.Event.ON_START -> isPausedByLifecycle = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val currentStory = stories.getOrNull(currentIndex)
 
@@ -100,20 +115,22 @@ fun StoryViewerScreen(
         currentStory?.let { onSeen(it.id) }
     }
 
-    // Avance automático — se detiene si isPaused; usa la duración real del media
+    // Avance automático — se detiene si isPaused y, al reanudar, sigue desde el progreso
+    // actual (progress solo vuelve a 0 al cambiar de historia); usa la duración real del media
     LaunchedEffect(currentIndex, isPaused, storyDurationMs) {
         if (isPaused) return@LaunchedEffect
+        val duration = storyDurationMs.coerceAtLeast(1L).toFloat()
+        val startProgress = progress
+        val startedAt = SystemClock.uptimeMillis()
+        while (true) {
+            val next = startProgress + (SystemClock.uptimeMillis() - startedAt) / duration
+            if (next >= 1f) break
+            progress = next
+            delay(PROGRESS_TICK_MS)
+        }
         progress = 0f
-        val steps = 100
-        val stepDuration = storyDurationMs / steps
-        repeat(steps) {
-            delay(stepDuration)
-            if (!isPaused) progress = (it + 1) / steps.toFloat()
-        }
-        if (!isPaused) {
-            if (currentIndex < stories.lastIndex) currentIndex++
-            else onDismiss()
-        }
+        if (currentIndex < stories.lastIndex) currentIndex++
+        else onDismiss()
     }
 
     if (currentStory == null) {
@@ -133,8 +150,6 @@ fun StoryViewerScreen(
                         isPausedByHold = false
                     },
                     onTap = { offset ->
-                        // No navegar mientras el usuario escribe
-                        if (isReplying) return@detectTapGestures
                         if (offset.x < size.width / 2) {
                             if (currentIndex > 0) currentIndex-- else onDismiss()
                         } else {
@@ -145,11 +160,16 @@ fun StoryViewerScreen(
                 )
             },
     ) {
-        StoryContent(
-            story = currentStory,
-            modifier = Modifier.fillMaxSize(),
-            onDurationReady = { durationMs -> storyDurationMs = durationMs },
-        )
+        // A new composition per story, so two videos in a row never share a PlayerView
+        // that still points to the previous (released) ExoPlayer
+        key(currentStory.id) {
+            StoryContent(
+                story = currentStory,
+                isPaused = isPaused,
+                modifier = Modifier.fillMaxSize(),
+                onDurationReady = { durationMs -> storyDurationMs = durationMs },
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -164,13 +184,16 @@ fun StoryViewerScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 stories.forEachIndexed { index, _ ->
-                    val segmentProgress = when {
-                        index < currentIndex -> 1f
-                        index == currentIndex -> progress
-                        else -> 0f
-                    }
                     LinearProgressIndicator(
-                        progress = { segmentProgress },
+                        // Read inside the lambda: the 20 ticks per second only redraw the
+                        // bar, instead of recomposing the whole viewer and its video
+                        progress = {
+                            when {
+                                index < currentIndex -> 1f
+                                index == currentIndex -> progress
+                                else -> 0f
+                            }
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(2.dp)
@@ -226,18 +249,6 @@ fun StoryViewerScreen(
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                // Indicador visual de pausa al responder
-                if (isReplying) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.Black.copy(alpha = 0.4f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    ) {
-                        Text("⏸", fontSize = 12.sp)
-                    }
-                    Spacer(Modifier.width(4.dp))
-                }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
                 }
@@ -256,63 +267,9 @@ fun StoryViewerScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            // Barra de respuesta
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                BasicTextField(
-                    value = replyText,
-                    onValueChange = { replyText = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.White.copy(alpha = 0.15f))
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .onFocusChanged { focusState ->
-                            // Pausa la historia cuando el teclado aparece
-                            isReplying = focusState.isFocused
-                        },
-                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                    cursorBrush = SolidColor(Color.White),
-                    decorationBox = { inner ->
-                        if (replyText.isEmpty()) {
-                            Text(
-                                "Responder a ${currentStory.authorName.split(" ").first()}…",
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 14.sp,
-                            )
-                        }
-                        inner()
-                    },
-                )
-                if (replyText.isNotBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF6C63FF))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
-                                replyText = ""
-                                isReplying = false
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Enviar",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-            }
+            // The reply bar was removed: there is no messaging backend yet and "Enviar"
+            // silently discarded the text. It comes back with the Messages feature.
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -321,6 +278,7 @@ fun StoryViewerScreen(
 @Composable
 private fun StoryContent(
     story: Story,
+    isPaused: Boolean,
     modifier: Modifier = Modifier,
     onDurationReady: (Long) -> Unit = {},
 ) {
@@ -330,7 +288,7 @@ private fun StoryContent(
         when {
             (story.type == StoryType.VIDEO || story.type == StoryType.REEL) && story.mediaUrl != null -> {
                 val exoPlayer = remember(story.mediaUrl) {
-                    ExoPlayer.Builder(context).build().apply {
+                    StoryMediaCache.newPlayer(context).apply {
                         setMediaItem(MediaItem.fromUri(story.mediaUrl))
                         repeatMode = ExoPlayer.REPEAT_MODE_ONE
                         playWhenReady = true
@@ -352,6 +310,10 @@ private fun StoryContent(
                         exoPlayer.release()
                     }
                 }
+                // Hold-to-pause and app-in-background must stop the video too, not just the progress
+                LaunchedEffect(exoPlayer, isPaused) {
+                    exoPlayer.playWhenReady = !isPaused
+                }
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
@@ -360,6 +322,7 @@ private fun StoryContent(
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         }
                     },
+                    update = { view -> view.player = exoPlayer },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -405,26 +368,21 @@ private fun MusicChip(story: Story, isPaused: Boolean) {
         val isDeezer = stored?.contains("dzcdn.net") == true
         val isEmpty = stored.isNullOrBlank()
         // Si es URL vieja de Deezer o no hay URL, buscar en iTunes con título+artista
-        if ((isDeezer || isEmpty) && !story.musicTitle.isNullOrBlank()) {
-            val q = java.net.URLEncoder.encode(
-                "${story.musicTitle} ${story.musicArtist.orEmpty()}", "UTF-8"
-            )
-            val url = "https://itunes.apple.com/search?term=$q&media=music&limit=1&country=MX"
-            runCatching {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val json = org.json.JSONObject(java.net.URL(url).readText())
-                    val results = json.getJSONArray("results")
-                    if (results.length() > 0) {
-                        results.getJSONObject(0).optString("previewUrl").ifBlank { null }
-                    } else null
-                }
-            }.getOrNull()?.let { resolvedUrl = it }
+        val title = story.musicTitle
+        if ((isDeezer || isEmpty) && !title.isNullOrBlank()) {
+            // MusicService applies connect/read timeouts, so a stalled lookup cannot hang
+            MusicService.resolvePreviewUrl(title, story.musicArtist)?.let { resolvedUrl = it }
         }
     }
 
     var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
+    // seekTo()/start() before onPrepared puts MediaPlayer in error (-38), so playback
+    // waits for this flag instead of starting as soon as the player exists
+    var isPrepared by remember(story.id, resolvedUrl) { mutableStateOf(false) }
+    // Seek to the chosen start only once; resuming after a pause continues where it was
+    var hasStarted by remember(story.id, resolvedUrl) { mutableStateOf(false) }
 
-    val mediaPlayer = remember(resolvedUrl) {
+    val mediaPlayer = remember(story.id, resolvedUrl) {
         val url = resolvedUrl ?: return@remember null
         MediaPlayer().apply {
             setAudioAttributes(
@@ -441,10 +399,8 @@ private fun MusicChip(story: Story, isPaused: Boolean) {
                     setTargetGain(400)
                     enabled = true
                 }
-                if (!isPaused) {
-                    mp.seekTo(story.musicStartMs.toInt())
-                    mp.start()
-                }
+                // The LaunchedEffect below starts playback (with fade-in) once prepared
+                isPrepared = true
             }
             // Si la URL falla (expirada), limpiar para que el LaunchedEffect no reintente la misma
             setOnErrorListener { _, _, _ ->
@@ -455,14 +411,18 @@ private fun MusicChip(story: Story, isPaused: Boolean) {
     }
 
     // Pausa/reanuda con fade-in para evitar el "pop"
-    LaunchedEffect(isPaused, resolvedUrl) {
+    LaunchedEffect(isPaused, isPrepared, mediaPlayer) {
         val mp = mediaPlayer ?: return@LaunchedEffect
+        if (!isPrepared) return@LaunchedEffect
         if (isPaused) {
             if (mp.isPlaying) mp.pause()
         } else {
             if (!mp.isPlaying) {
                 mp.setVolume(0f, 0f)
-                mp.seekTo(story.musicStartMs.toInt())
+                if (!hasStarted) {
+                    mp.seekTo(story.musicStartMs.toInt())
+                    hasStarted = true
+                }
                 mp.start()
                 repeat(20) { i ->
                     delay(8)
@@ -473,14 +433,14 @@ private fun MusicChip(story: Story, isPaused: Boolean) {
     }
 
     // Detiene al acabar la duración elegida
-    LaunchedEffect(isPaused, resolvedUrl) {
-        if (!isPaused && mediaPlayer != null) {
+    LaunchedEffect(isPaused, isPrepared, mediaPlayer) {
+        if (!isPaused && isPrepared && mediaPlayer != null) {
             delay(story.musicDurationMs)
             if (mediaPlayer.isPlaying) mediaPlayer.pause()
         }
     }
 
-    DisposableEffect(resolvedUrl) {
+    DisposableEffect(mediaPlayer) {
         onDispose {
             loudnessEnhancer?.release()
             mediaPlayer?.stop()
