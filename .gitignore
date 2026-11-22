@@ -42,3 +42,6 @@ core/*/build
 
 # Profiling
 *.hprof
+
+# Firebase emulator logs
+*-debug.log
