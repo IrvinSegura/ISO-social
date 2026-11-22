@@ -6,7 +6,7 @@ import com.nexus.feature.post.domain.model.Eco
 import com.nexus.feature.post.domain.model.EcoType
 import com.nexus.feature.post.domain.model.PostDetail
 
-fun EcoDto.toDomain(): Eco = Eco(
+fun EcoDto.toDomain(currentUserId: String): Eco = Eco(
     id = id,
     authorId = authorId,
     authorName = authorName,
@@ -15,9 +15,13 @@ fun EcoDto.toDomain(): Eco = Eco(
     emoji = emoji,
     mediaUrl = mediaUrl,
     createdAt = createdAt,
+    parentId = parentId,
+    replyToName = replyToName,
+    likeCount = likedBy.size,
+    likedByMe = currentUserId in likedBy,
 )
 
-fun PostDto.toDetail(currentUserId: String, ecos: List<Eco>): PostDetail = PostDetail(
+fun PostDto.toDetail(currentUserId: String, ecos: List<Eco>, myReaction: String? = null): PostDetail = PostDetail(
     id = id,
     authorId = authorId,
     authorName = authorName,
@@ -32,8 +36,10 @@ fun PostDto.toDetail(currentUserId: String, ecos: List<Eco>): PostDetail = PostD
     fileName = fileName,
     mood = mood,
     locationName = locationName,
+    gifUrl = gifUrl,
     reactions = reactions.mapValues { (_, v) -> (v as? Number)?.toInt() ?: 0 },
     createdAt = createdAt,
     isOwnPost = authorId == currentUserId,
     ecos = ecos,
+    myReaction = myReaction,
 )
