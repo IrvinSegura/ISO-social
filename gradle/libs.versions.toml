@@ -100,7 +100,6 @@ firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.r
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore-ktx" }
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage-ktx" }
-firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
 
 # Google Credential Manager (modern Google Sign-In)
@@ -130,5 +129,5 @@ google-services = { id = "com.google.gms.google-services", version.ref = "google
 
 [bundles]
 compose-core = ["androidx-ui", "androidx-ui-graphics", "androidx-ui-tooling-preview", "androidx-material3", "androidx-material-icons-extended"]
-firebase = ["firebase-auth", "firebase-firestore", "firebase-storage", "firebase-messaging", "firebase-analytics"]
+firebase = ["firebase-auth", "firebase-firestore", "firebase-storage", "firebase-analytics"]
 credentials = ["credentials", "credentials-play-services", "googleid"]
