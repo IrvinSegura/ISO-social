@@ -7,7 +7,7 @@
 Feed con modo offline, historias de 24 horas con música, publicaciones multimedia, respuestas ("ecos") en varios formatos,
 círculos privados con código de invitación y mensajes directos en tiempo real.
 
-[![Android CI](https://github.com/IrvinSegura/ISO-social/actions/workflows/android-ci.yml/badge.svg)](https://github.com/IrvinSegura/ISO-social/actions/workflows/android-ci.yml)
+[![Android CI](https://github.com/IrvinSegura/Nexus/actions/workflows/android-ci.yml/badge.svg)](https://github.com/IrvinSegura/Nexus/actions/workflows/android-ci.yml)
 ![Kotlin 2.0](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B%20(API%2026)-3DDC84?logo=android&logoColor=white)
@@ -228,7 +228,7 @@ La guía paso a paso (Google Sign-In, SHA-1, claves, Supabase y reglas) está en
 ## Estructura del repositorio
 
 ```
-ISO-social/
+Nexus/
 ├── .github/workflows/          # CI: compila el APK de debug y corre las pruebas unitarias
 ├── app/                        # MainActivity, NexusApp y navegación raíz (NexusNavHost, MainScreen)
 ├── core/
