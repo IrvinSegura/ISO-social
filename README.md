@@ -228,27 +228,39 @@ La guía paso a paso (Google Sign-In, SHA-1, claves, Supabase y reglas) está en
 ## Estructura del repositorio
 
 ```
-Nexus/
-├── app/                     # Entry point y navegación raíz
+ISO-social/
+├── .github/workflows/          # CI: compila el APK de debug y corre las pruebas unitarias
+├── app/                        # MainActivity, NexusApp y navegación raíz (NexusNavHost, MainScreen)
 ├── core/
-│   ├── core-common/         # NexusResult, dispatchers, ApplicationScope, event bus
-│   ├── core-ui/             # Sistema de diseño: tema, tipografía y componentes
-│   ├── core-datastore/      # Sesión y preferencias (tema) con DataStore
-│   ├── core-firebase/       # Firebase, acciones compartidas (guardar, reportar) y directorio de círculos
-│   ├── core-storage/        # Subida de archivos a Supabase Storage
-│   └── core-giphy/          # Cliente de Giphy y selector de GIFs y emojis animados
+│   ├── core-common/            # NexusResult, dispatchers, ApplicationScope, event bus, extensiones y media
+│   ├── core-ui/                # Sistema de diseño: tema, tipografía Figtree, componentes y compartir
+│   ├── core-datastore/         # Sesión y preferencias (tema) con DataStore
+│   ├── core-firebase/          # Firebase, acciones compartidas (guardar, reportar) y directorio de círculos
+│   ├── core-storage/           # Subida de archivos a Supabase Storage y rutas por usuario
+│   └── core-giphy/             # Cliente de Giphy y selector de GIFs y emojis animados
 ├── feature/
-│   ├── feature-auth/        # Login, registro, Google Sign-In
-│   ├── feature-feed/        # Feed paginado e historias
-│   ├── feature-post/        # Crear, editar y borrar posts; detalle y ecos
-│   ├── feature-profile/     # Perfil, guardados y ajustes
-│   ├── feature-circles/     # Círculos: crear, unirse con código, miembros y publicaciones
-│   └── feature-messages/    # Mensajes directos entre gente que comparte un círculo
-│       ├── data/            # DataSources, DTOs, mappers, implementación del Repository
-│       ├── domain/          # Modelos, interfaces de Repository, casos de uso
-│       └── presentation/    # ViewModels (MVI), pantallas Compose, DI
-├── firestore.rules          # Reglas de seguridad de Firestore
-├── firestore.indexes.json   # Índices compuestos
-├── supabase/                # Buckets y políticas de Supabase Storage
-└── docs/                    # Capturas, licencias e informe de revisión
+│   ├── feature-auth/           # Login, registro, Google Sign-In
+│   ├── feature-feed/           # Feed paginado e historias
+│   ├── feature-post/           # Crear, editar y borrar posts; detalle y ecos
+│   ├── feature-profile/        # Perfil, guardados y ajustes
+│   ├── feature-circles/        # Círculos: crear, unirse con código, miembros y publicaciones
+│   └── feature-messages/       # Mensajes directos entre gente que comparte un círculo
+├── supabase/storage-setup.sql  # Buckets y políticas de Supabase Storage
+├── scripts/                    # configure-supabase.ps1: conecta la app a un proyecto de Supabase en un paso
+├── prototypes/                 # Prototipo HTML de las tarjetas de publicación
+├── docs/                       # Capturas, licencia de la fuente e informe de revisión
+├── firestore.rules             # Reglas de seguridad de Firestore
+├── firestore.indexes.json      # Índices compuestos
+├── firebase.json, .firebaserc  # Configuración de Firebase CLI
+├── compose-stability.conf      # Clases que el compilador de Compose trata como estables
+└── SETUP.md                    # Guía de configuración paso a paso
+```
+
+Cada módulo `feature-*` tiene las mismas capas:
+
+```
+feature-xxx/
+├── data/           # DataSources, DTOs, mappers e implementación del Repository
+├── domain/         # Modelos, interfaces de Repository y casos de uso (sin Android ni Firebase)
+└── presentation/   # ViewModels (MVI), pantallas Compose y módulos de Hilt
 ```
