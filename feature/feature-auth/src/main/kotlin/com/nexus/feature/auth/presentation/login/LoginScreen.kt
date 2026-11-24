@@ -180,7 +180,7 @@ fun LoginScreen(
 @Composable
 private fun LoginHeader() {
     Text(
-        text = "ISO Social",
+        text = "Nexus",
         style = MaterialTheme.typography.displayMedium,
         color = MaterialTheme.colorScheme.primary,
     )

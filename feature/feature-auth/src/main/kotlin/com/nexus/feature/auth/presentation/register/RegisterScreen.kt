@@ -209,7 +209,7 @@ fun RegisterScreen(
 @Composable
 private fun RegisterHeader() {
     Text(
-        text = "Join ISO Social",
+        text = "Join Nexus",
         style = MaterialTheme.typography.headlineLarge,
         color = MaterialTheme.colorScheme.onBackground,
     )

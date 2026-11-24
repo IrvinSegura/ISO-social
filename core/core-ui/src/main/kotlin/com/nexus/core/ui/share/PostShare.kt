@@ -52,7 +52,7 @@ object PostShare {
         "com.google.android.gm" to "Gmail",
     )
 
-    private const val APP_NAME = "ISO Social"
+    private const val APP_NAME = "Nexus"
     private const val SHARE_DIR = "shared"
     private const val MAX_EXCERPT = 280
 
