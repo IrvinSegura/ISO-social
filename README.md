@@ -4,13 +4,15 @@ Red social para Android construida con **Kotlin y Jetpack Compose**: feed con mo
 
 El objetivo del proyecto no es solo la app, sino cómo está construida: arquitectura modular, Clean Architecture con MVI, una sola fuente de verdad en Room y reglas de seguridad versionadas junto al código.
 
-<!--
-  Capturas: crea la carpeta docs/screenshots/, agrega las imágenes y descomenta esta tabla.
+## Capturas
 
-| Feed | Historias | Crear post | Detalle y ecos |
-|:---:|:---:|:---:|:---:|
-| <img src="docs/screenshots/feed.png" width="200"/> | <img src="docs/screenshots/stories.png" width="200"/> | <img src="docs/screenshots/create-post.png" width="200"/> | <img src="docs/screenshots/post-detail.png" width="200"/> |
--->
+| Inicio | Detalle y ecos | Crear publicación |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/feed.png" width="240" alt="Feed de inicio con historias y publicaciones"/> | <img src="docs/screenshots/post-detail.png" width="240" alt="Detalle de una publicación con reacciones y ecos"/> | <img src="docs/screenshots/create-post.png" width="240" alt="Pantalla para crear una publicación"/> |
+
+| Círculos | Mensajes | Perfil |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/circles.png" width="240" alt="Pantalla de círculos privados"/> | <img src="docs/screenshots/messages.png" width="240" alt="Pantalla de mensajes directos"/> | <img src="docs/screenshots/profile.png" width="240" alt="Perfil con publicaciones y guardados"/> |
 
 ---
 
